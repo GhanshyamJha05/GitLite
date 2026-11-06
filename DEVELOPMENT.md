@@ -27,6 +27,14 @@
   - `gitlite add <file>` and recursive `gitlite add .`.
   - `gitlite status` reporting untracked, modified, and staged changes.
   - Integration tests verifying full add, staging, status, and tree generation cycle.
+- [x] **Milestone 4: Commits and History**
+  - Canonical Commit object formatting with root tree hash, parent commit pointers, Author/Committer signatures, and commit message.
+  - Commit parser (`ParseCommit`) and CAS loader (`ReadCommit`).
+  - Atomic Reference Management (`internal/refs`): `ResolveHead`, `UpdateHead` with unborn branch resolution and crash-safe updates.
+  - Snapshot creation via `gitlite commit -m "..."`.
+  - Full DAG ancestry traversal via `gitlite log`.
+  - Detailed commit inspection via `gitlite show [commit-hash]`.
+  - Integration tests verifying commit chains, log outputs, and empty staging safeguards.
 
 ## Current Implementation Status
 - `internal/object`:
@@ -34,8 +42,12 @@
   - `object.go`: `Object` interface, `Type` enum (`blob`, `tree`, `commit`), `EncodeCanonical`, `DecodeCanonical`.
   - `blob.go`: `Blob` object implementation wrapping raw bytes.
   - `tree.go`: `Tree` and `TreeEntry` supporting binary SHA-256 packing, mode bits, deterministic sorting, and parsing.
-  - `store.go`: `Store` engine providing `Write`, `Read`, `ReadBlob`, `ReadTree`, `Has`, `Verify`, and 2-level directory path resolution.
-  - `store_test.go` & `tree_test.go`: Unit tests and write/read memory & throughput benchmarks.
+  - `commit.go`: `Commit`, `Signature`, and `CommitWithHash` types, canonical framing, timestamp/timezone formatting, and parser.
+  - `store.go`: `Store` engine providing `Write`, `Read`, `ReadBlob`, `ReadTree`, `ReadCommit`, `Has`, `Verify`, and 2-level directory path resolution.
+  - `store_test.go`, `tree_test.go`, `commit_test.go`: Unit tests and write/read memory & throughput benchmarks.
+- `internal/refs`:
+  - `refs.go`: Reference manager (`ResolveHead`, `UpdateHead`, `atomicWriteRef`).
+  - `refs_test.go`: Unit test validating unborn branch resolution and atomic pointer progression.
 - `internal/index`:
   - `entry.go`: Staged file record (`Path`, `Hash`, `Mode`, `Size`, `ModTimeNano`).
   - `index.go`: Staging area management (`Add`, `Remove`, `Get`, `SortedEntries`, `Load`, `Save`, `WriteTree`).
@@ -45,41 +57,43 @@
   - `discovery.go`: Upward root discovery.
   - `staging.go`: Staging engine (`Add`, `stageFile`, path security guards).
   - `status.go`: Working tree scanning & change detection (`Status`).
+  - `commit.go`: Commit execution pipeline (`Commit`, `Log`, `DefaultSignature`).
 - `internal/cli`:
   - `root.go`: Cobra root setup.
   - `init.go`: `gitlite init [directory]`.
   - `add.go`: `gitlite add <path>...`.
   - `status.go`: `gitlite status`.
+  - `commit.go`: `gitlite commit -m "<message>"`.
+  - `log.go`: `gitlite log`.
+  - `show.go`: `gitlite show [commit]`.
 - `tests/integration`:
   - `init_test.go`: Repository initialization integration tests.
   - `staging_test.go`: Add, status, and staging integration tests.
+  - `commit_test.go`: End-to-end commit creation, commit ancestry chain logging, and inspection tests.
 
 ## Architectural Decisions
-1. **Tree Entry Serialization**:
-   - Canonical format: `<mode> <name>\0<32-byte-binary-hash>`.
-   - Binary packing of SHA-256 (32 bytes per entry instead of 64-byte hex) mirrors Git's space efficiency.
-2. **Atomic Index Persistence**:
-   - `.gitlite/index` is serialized to a JSON payload through a temporary file and atomically renamed, ensuring uncorrupted staging state upon power failure or process kill.
-3. **Bottom-Up Hierarchical Tree Generation**:
-   - `idx.WriteTree(store)` converts flat path strings (`a/b/c.txt`) into an in-memory prefix tree, writing leaf directories first and linking parent hashes upwards until the root tree hash is returned.
-4. **Security & Guardrails**:
-   - Worktree path bounds checking prevents directory traversal attacks (`../`).
-   - `.gitlite` and `.git` directories are strictly excluded from recursive staging.
+1. **Commit Object Invariant**:
+   - Commits contain a pointer to the root `Tree`, not individual file diffs. Every commit is a full, self-contained repository snapshot.
+2. **Deterministic Signatures**:
+   - `Signature` standardizes POSIX timestamp and timezone offset strings (`+0530`), guaranteeing reproducibility.
+3. **Reference Safety**:
+   - `refs.Manager` writes branch heads to temp files before replacing target refs atomically, eliminating dangling branch heads during crash events.
+4. **Graph Traversal**:
+   - `Log` performs first-parent commit chain traversal back to the root commit, with cycle detection guardrails.
 
 ## Outstanding Tasks / Roadmap
-- [ ] **Milestone 4: Commits and History**
-  - Commit object representation: root tree hash, parent commit hashes, author, committer, timestamp, message.
-  - Commit object serialization & parsing.
-  - `gitlite commit -m "message"`.
-  - HEAD reference update to new commit hash.
-  - `gitlite log` displaying commit ancestry chain.
-  - `gitlite show <commit>`.
-- [ ] **Milestone 5: Branching & Checkout**
+- [ ] **Milestone 5: Branch Management & Checkout**
+  - Create branches: `gitlite branch <name>`.
+  - List branches: `gitlite branch` (highlight active branch).
+  - Delete branches: `gitlite branch -d <name>`.
+  - Branch switching & Working-tree restoration: `gitlite checkout <branch>` / `gitlite switch <branch>`.
+  - Dirty working-tree protection (never overwrite uncommitted local edits).
+  - Detached HEAD support.
 - [ ] **Milestone 6: Diff Engine**
 - [ ] **Milestone 7: Three-Way Merge Engine**
 - [ ] **Milestone 8: Integrity & Recovery (`fsck`)**
 - [ ] **Milestone 9: Performance Benchmarking & Profiling**
 
 ## Next Recommended Task
-- Proceed to **Milestone 4: Commits and History**. Implement the `Commit` object, commit graph links, `gitlite commit -m "..."`, reference updates, and `gitlite log`.
+- Proceed to **Milestone 5: Branch Management & Checkout**. Implement branch creation, branch listing, branch deletion, safe tree-to-working-directory checkout, and dirty working-tree safeguards.
 

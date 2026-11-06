@@ -114,3 +114,4 @@ func TestAddAndStatus(t *testing.T) {
 		t.Errorf("root tree was not stored in CAS")
 	}
 }
+
