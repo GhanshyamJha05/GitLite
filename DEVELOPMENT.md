@@ -43,6 +43,14 @@
   - Working tree restoration: deletes files not in target commit, writes new/updated files, cleans up empty directories, updates index, and shifts HEAD.
   - Dual commands: `gitlite checkout <branch-or-commit>` (including detached HEAD) and `gitlite switch <branch>`.
   - Integration tests verifying branch creation, file swapping between branches, switch back, and dirty tree clobber prevention.
+- [x] **Milestone 6: Diff Engine**
+  - Line-by-line file comparison engine (`internal/diff/algorithm.go`) based on the Longest Common Subsequence (LCS) algorithm.
+  - Unified diff formatting (`--- a/... +++ b/... @@ -1,X +1,Y @@`).
+  - Working tree vs index diffing (`DiffWorkingTreeAgainstIndex`).
+  - Staged index vs HEAD commit diffing (`DiffIndexAgainstHead`).
+  - Arbitrary commit-to-commit tree comparison (`DiffCommits`).
+  - CLI command: `gitlite diff` (working tree vs index), `gitlite diff --staged` / `--cached` (index vs HEAD), and `gitlite diff <commit-a> <commit-b>`.
+  - Full integration test suite validating working tree, staged, and commit-to-commit unified diff streams.
 
 ## Current Implementation Status
 - `internal/object`:
@@ -53,6 +61,9 @@
   - `commit.go`: `Commit`, `Signature`, and `CommitWithHash` types, canonical framing, timestamp/timezone formatting, and parser.
   - `store.go`: `Store` engine providing `Write`, `Read`, `ReadBlob`, `ReadTree`, `ReadCommit`, `Has`, `Verify`, and 2-level directory path resolution.
   - `store_test.go`, `tree_test.go`, `commit_test.go`: Unit tests and write/read memory & throughput benchmarks.
+- `internal/diff`:
+  - `algorithm.go`: Line-based Longest Common Subsequence (LCS) edit script generation (`ComputeLCS`) and unified diff formatter (`UnifiedDiff`).
+  - `algorithm_test.go`: LCS and unified diff unit tests.
 - `internal/refs`:
   - `refs.go`: Reference manager (`ResolveHead`, `UpdateHead`, `atomicWriteRef`).
   - `branch.go`: Branch operations (`ListBranches`, `CreateBranch`, `DeleteBranch`, `SetHeadBranch`, `SetHeadDetached`, `ResolveBranch`).
@@ -68,6 +79,7 @@
   - `status.go`: Working tree scanning & change detection (`Status`).
   - `commit.go`: Commit execution pipeline (`Commit`, `Log`, `DefaultSignature`).
   - `checkout.go`: `FlattenTree` and `Checkout` with working tree integrity guards.
+  - `diff.go`: Unified diff coordination (`DiffWorkingTreeAgainstIndex`, `DiffIndexAgainstHead`, `DiffCommits`).
 - `internal/cli`:
   - `root.go`: Cobra root setup.
   - `init.go`: `gitlite init [directory]`.
@@ -78,33 +90,43 @@
   - `show.go`: `gitlite show [commit]`.
   - `branch.go`: `gitlite branch [-d <name>] [name]`.
   - `checkout.go`: `gitlite checkout <branch-or-commit>` & `gitlite switch <branch>`.
+  - `diff.go`: `gitlite diff [--staged] [commit-a] [commit-b]`.
 - `tests/integration`:
   - `init_test.go`: Repository initialization integration tests.
   - `staging_test.go`: Add, status, and staging integration tests.
   - `commit_test.go`: End-to-end commit creation, commit ancestry chain logging, and inspection tests.
   - `branch_test.go`: Branch lifecycle, safe checkout, and collision prevention integration tests.
+  - `diff_test.go`: Working tree, staged, and commit-to-commit unified diff integration tests.
 
 ## Architectural Decisions
-1. **Lightweight Branch Pointers**:
-   - Branches are simple 65-byte files (`<hash>\n`) under `.gitlite/refs/heads/<name>`.
-2. **Checkout Safety Invariants**:
-   - GitLite guarantees user data preservation during checkouts: if a file in the working tree is untracked or has uncommitted edits and would be overwritten by the destination commit's tree, `Checkout` aborts immediately with `ErrDirtyWorkingTree`.
-3. **Symbolic vs Detached HEAD**:
-   - When pointing to a branch: `.gitlite/HEAD` contains `ref: refs/heads/<branch>\n`.
-   - When checking out a raw commit: `.gitlite/HEAD` contains the 64-char commit hash directly.
+1. **LCS / Diff Algorithm**:
+   - `ComputeLCS` breaks multiline file streams into discrete lines and performs dynamic-programming longest common subsequence analysis, emitting sequence edits (`OpEqual`, `OpInsert`, `OpDelete`).
+2. **Unified Diff Format**:
+   - Outputs standard unified diff notation (`--- a/path`, `+++ b/path`, `@@ -old,count +new,count @@`, with `-` and `+` line prefixes) compatible with developer expectations and terminal pagers.
+3. **Multi-Source Diffing**:
+   - Compares physically modified files against staged index blobs.
+   - Compares staged index blobs against tree snapshots in `HEAD`.
+   - Compares tree objects between two arbitrary historical commit snapshots.
 
 ## Outstanding Tasks / Roadmap
-- [ ] **Milestone 6: Diff Engine**
-  - Line-based difference comparison.
-  - Myers diff algorithm / Longest Common Subsequence (LCS).
-  - Unified diff format output (`--- a/... +++ b/... @@ -1,3 +1,3 @@`).
-  - `gitlite diff` (working tree vs staged index).
-  - `gitlite diff --staged` (index vs HEAD commit).
-  - `gitlite diff <commit-a> <commit-b>`.
 - [ ] **Milestone 7: Three-Way Merge Engine**
+  - Common ancestor discovery via commit graph traversal (BFS / Lowest Common Ancestor).
+  - Three-way file merging: ancestor vs current branch (`HEAD`) vs incoming branch.
+  - Non-conflicting change resolution (independent additions, modifications, deletions).
+  - Conflict detection & standard conflict marker generation:
+    ```text
+    <<<<<<< CURRENT
+    ...
+    =======
+    ...
+    >>>>>>> INCOMING
+    ```
+  - `gitlite merge <branch>` command.
+  - Merge commit creation with two parent hashes (`parent <head> \n parent <incoming>`).
+  - Merge abort (`gitlite merge --abort`) and continuation (`gitlite merge --continue`).
 - [ ] **Milestone 8: Integrity & Recovery (`fsck`)**
 - [ ] **Milestone 9: Performance Benchmarking & Profiling**
 
 ## Next Recommended Task
-- Proceed to **Milestone 6: Diff Engine**. Implement Myers diff / LCS algorithm, unified diff formatter, working tree vs index comparison, staged index vs HEAD comparison, and arbitrary commit-to-commit diffing.
+- Proceed to **Milestone 7: Three-Way Merge Engine**. Implement common ancestor search across commit DAG, three-way line merge resolution with conflict markers, `gitlite merge`, and merge commit creation.
 

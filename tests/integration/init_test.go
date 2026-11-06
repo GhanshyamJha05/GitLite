@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"gitlite/internal/cli"
 	"gitlite/internal/repository"
 )
@@ -14,12 +15,21 @@ import (
 func executeCommand(args ...string) (string, error) {
 	cmd := cli.GetRootCmd()
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs(args)
 
+	var setOutRecursive func(c *cobra.Command)
+	setOutRecursive = func(c *cobra.Command) {
+		c.SetOut(buf)
+		c.SetErr(buf)
+		for _, sub := range c.Commands() {
+			setOutRecursive(sub)
+		}
+	}
+	setOutRecursive(cmd)
+
+	cmd.SetArgs(args)
 	err := cmd.Execute()
-	return buf.String(), err
+	out := buf.String()
+	return out, err
 }
 
 func TestCLIInit(t *testing.T) {
