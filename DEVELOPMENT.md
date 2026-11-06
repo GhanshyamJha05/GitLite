@@ -66,6 +66,14 @@
   - Two-parent merge commit synthesis (`parents: [headHash, incomingHash]`).
   - CLI command: `gitlite merge <branch-or-commit>`.
   - Full integration tests covering fast-forward merges, 3-way clean merges, and merge conflict marker generation.
+- [x] **Milestone 8: Data Integrity and Recovery (`fsck`)**
+  - Database audit engine (`internal/integrity/verify.go`).
+  - Cryptographic verification of all stored CAS objects (verifies decompression, header syntax, and SHA-256 match).
+  - Graph connectivity auditing: traces references from all branch heads and HEAD through commits, trees, and subtrees down to leaf blobs.
+  - Missing pointer and broken ref detection.
+  - Dangling object detection (identifies unreferenced blobs, trees, or commits).
+  - CLI command: `gitlite fsck`.
+  - Integration test simulating intentional bit rot / object tampering and confirming detection.
 
 ## Current Implementation Status
 - `internal/object`:
@@ -83,6 +91,8 @@
   - `ancestor.go`: Lowest Common Ancestor (LCA) search via BFS over parent commit graphs (`FindCommonAncestor`).
   - `conflict.go`: Three-way content merger (`ThreeWayMergeContent`) emitting standard conflict markers upon collision.
   - `merge_test.go`: Ancestor graph and conflict resolution unit tests.
+- `internal/integrity`:
+  - `verify.go`: Repository verification engine (`Fsck`, `Report`, `Issue`), validating bit rot, reachability, and dangling objects.
 - `internal/refs`:
   - `refs.go`: Reference manager (`ResolveHead`, `UpdateHead`, `atomicWriteRef`).
   - `branch.go`: Branch operations (`ListBranches`, `CreateBranch`, `DeleteBranch`, `SetHeadBranch`, `SetHeadDetached`, `ResolveBranch`).
@@ -112,6 +122,7 @@
   - `checkout.go`: `gitlite checkout <branch-or-commit>` & `gitlite switch <branch>`.
   - `diff.go`: `gitlite diff [--staged] [commit-a] [commit-b]`.
   - `merge.go`: `gitlite merge <branch>`.
+  - `fsck.go`: `gitlite fsck`.
 - `tests/integration`:
   - `init_test.go`: Repository initialization integration tests.
   - `staging_test.go`: Add, status, and staging integration tests.
@@ -119,26 +130,22 @@
   - `branch_test.go`: Branch lifecycle, safe checkout, and collision prevention integration tests.
   - `diff_test.go`: Working tree, staged, and commit-to-commit unified diff integration tests.
   - `merge_test.go`: Clean fast-forward, 3-way merge commits, and merge conflict integration tests.
+  - `fsck_test.go`: Integrity check and simulated corruption detection tests.
 
 ## Architectural Decisions
-1. **Lowest Common Ancestor (LCA)**:
-   - Traverses parent pointers using breadth-first search and ancestor set intersection, correctly identifying split points even after multiple branch divergences.
-2. **Fast-Forward Detection**:
-   - If the LCA equals the current `HEAD` commit, no merge commit is created; `HEAD` simply advances directly to the incoming branch tip.
-3. **Three-Way Merge Matrix**:
-   - Compares each file across Ancestor, Current, and Incoming. Only files with incompatible edits on both sides produce conflict markers.
-4. **Merge Commit Topology**:
-   - Clean non-fast-forward merges create a commit with two parents (`Parents: [headHash, incomingHash]`), properly recorded in the DAG.
+1. **Full Integrity Verification**:
+   - `fsck` tests the physical layers: decompression + cryptographic SHA-256 verification of every file in `.gitlite/objects/`.
+2. **Reachability Tracing**:
+   - Commencing at all branch references in `.gitlite/refs/heads/` and `HEAD`, it traces the full graph of commits $\to$ trees $\to$ blobs.
+3. **Dangling Object Isolation**:
+   - Objects present in `.gitlite/objects/` that cannot be reached from any active ref are categorized as dangling (e.g. from abandoned staging or deleted branch tips), preparing GitLite for future garbage collection (`gc`).
 
 ## Outstanding Tasks / Roadmap
-- [ ] **Milestone 8: Data Integrity and Recovery (`fsck`)**
-  - Implement `gitlite fsck` command.
-  - Object store audit: decompress all objects, verify cryptographic hashes, and report corruptions.
-  - Reachability check: verify tree references, commit parents, and ref pointers.
-  - Dangling object detection (unreferenced blobs/trees).
-- [ ] **Milestone 9: Performance Benchmarking & Profiling**
-- [ ] **Milestone 10: Documentation & Release**
+- [ ] **Milestone 9: Performance Benchmarking & Optimization**
+  - Add benchmark suite for status computation, staging, tree building, and commit generation.
+- [ ] **Milestone 10: Final Documentation & Release Preparation**
+  - Expand README with comprehensive architecture diagrams and command reference.
 
 ## Next Recommended Task
-- Proceed to **Milestone 8: Data Integrity and Recovery (`fsck`)**. Implement repository verification, object hash validation, tree and commit pointer consistency auditing, and dangling object detection.
+- Proceed to **Milestone 9: Performance Benchmarking & Optimization** and **Milestone 10: Documentation & Release Preparation**. Expand benchmark coverage and complete user-facing documentation.
 
