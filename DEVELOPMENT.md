@@ -18,46 +18,62 @@
   - Content integrity checks on read (detecting hash mismatches and bit rot).
   - De-duplication on identical object writes.
   - Comprehensive unit tests: hash validation, corruption detection, concurrent writes, and Go benchmarks.
+- [x] **Milestone 3: Trees and Staging Area (Index)**
+  - Tree objects (`object.Tree`, `object.TreeEntry`) with canonical serialization and deterministic POSIX byte-order sorting.
+  - In-memory and on-disk Index (`internal/index`) tracking file metadata (mtime, size, mode, path, blob hash).
+  - Atomic index serialization via temporary file write and atomic rename (`.gitlite/index`).
+  - Bottom-up hierarchical tree generation from staged paths (`Index.WriteTree`).
+  - Recursive working-tree traversal with path traversal guardrails and `.gitlite` exclusion.
+  - `gitlite add <file>` and recursive `gitlite add .`.
+  - `gitlite status` reporting untracked, modified, and staged changes.
+  - Integration tests verifying full add, staging, status, and tree generation cycle.
 
 ## Current Implementation Status
 - `internal/object`:
   - `hash.go`: `Hash` type (32-byte SHA-256 hex string), validation, `ComputeHash`.
   - `object.go`: `Object` interface, `Type` enum (`blob`, `tree`, `commit`), `EncodeCanonical`, `DecodeCanonical`.
   - `blob.go`: `Blob` object implementation wrapping raw bytes.
-  - `store.go`: `Store` engine providing `Write`, `Read`, `ReadBlob`, `Has`, `Verify`, and 2-level directory path resolution.
-  - `store_test.go`: Unit tests and write/read memory & throughput benchmarks.
+  - `tree.go`: `Tree` and `TreeEntry` supporting binary SHA-256 packing, mode bits, deterministic sorting, and parsing.
+  - `store.go`: `Store` engine providing `Write`, `Read`, `ReadBlob`, `ReadTree`, `Has`, `Verify`, and 2-level directory path resolution.
+  - `store_test.go` & `tree_test.go`: Unit tests and write/read memory & throughput benchmarks.
+- `internal/index`:
+  - `entry.go`: Staged file record (`Path`, `Hash`, `Mode`, `Size`, `ModTimeNano`).
+  - `index.go`: Staging area management (`Add`, `Remove`, `Get`, `SortedEntries`, `Load`, `Save`, `WriteTree`).
+  - `index_test.go`: Staging persistence and nested tree graph generation tests.
 - `internal/repository`:
-  - Integrated `Store` instance directly into `Repository` struct upon initialization and discovery.
+  - `repository.go`: Root repo structure & initialization.
+  - `discovery.go`: Upward root discovery.
+  - `staging.go`: Staging engine (`Add`, `stageFile`, path security guards).
+  - `status.go`: Working tree scanning & change detection (`Status`).
 - `internal/cli`:
   - `root.go`: Cobra root setup.
-  - `init.go`: `gitlite init [directory]` command.
-- `cmd/gitlite`:
-  - `main.go`: Entry point calling `cli.Execute()`.
+  - `init.go`: `gitlite init [directory]`.
+  - `add.go`: `gitlite add <path>...`.
+  - `status.go`: `gitlite status`.
 - `tests/integration`:
-  - `init_test.go`: End-to-end testing of `gitlite init` CLI execution.
+  - `init_test.go`: Repository initialization integration tests.
+  - `staging_test.go`: Add, status, and staging integration tests.
 
 ## Architectural Decisions
-1. **Repository Layout**:
-   - Directory name: `.gitlite`
-   - Default initial branch: `main`
-   - Initial `HEAD` reference: `ref: refs/heads/main\n`
-   - Hashing engine: SHA-256 for all object addressing.
-2. **Object Framing**:
-   - Standard canonical format: `<type> <size>\0<payload>` ensures deterministic IDs across languages and architectures.
-3. **Atomic Durability**:
-   - Write-to-temp-then-rename ensures readers never observe partial or torn object writes even during system crashes or power failures.
-4. **Benchmarks**:
-   - Write throughput: ~20 µs/op, 913 B/op, 10 allocs/op.
-   - Read & verification: ~76 µs/op, 46 KB/op (including decompression stream buffers and hash validation).
+1. **Tree Entry Serialization**:
+   - Canonical format: `<mode> <name>\0<32-byte-binary-hash>`.
+   - Binary packing of SHA-256 (32 bytes per entry instead of 64-byte hex) mirrors Git's space efficiency.
+2. **Atomic Index Persistence**:
+   - `.gitlite/index` is serialized to a JSON payload through a temporary file and atomically renamed, ensuring uncorrupted staging state upon power failure or process kill.
+3. **Bottom-Up Hierarchical Tree Generation**:
+   - `idx.WriteTree(store)` converts flat path strings (`a/b/c.txt`) into an in-memory prefix tree, writing leaf directories first and linking parent hashes upwards until the root tree hash is returned.
+4. **Security & Guardrails**:
+   - Worktree path bounds checking prevents directory traversal attacks (`../`).
+   - `.gitlite` and `.git` directories are strictly excluded from recursive staging.
 
 ## Outstanding Tasks / Roadmap
-- [ ] **Milestone 3: Trees and Staging Area (Index)**
-  - Tree entries: mode, type, filename, hash.
-  - Tree serialization/deserialization.
-  - In-memory & on-disk Index (staging area) tracking file metadata (mtime, size, mode, path, blob hash).
-  - `gitlite add <file>` and recursive `gitlite add .`.
-  - `gitlite status` reporting untracked, modified, and staged changes.
 - [ ] **Milestone 4: Commits and History**
+  - Commit object representation: root tree hash, parent commit hashes, author, committer, timestamp, message.
+  - Commit object serialization & parsing.
+  - `gitlite commit -m "message"`.
+  - HEAD reference update to new commit hash.
+  - `gitlite log` displaying commit ancestry chain.
+  - `gitlite show <commit>`.
 - [ ] **Milestone 5: Branching & Checkout**
 - [ ] **Milestone 6: Diff Engine**
 - [ ] **Milestone 7: Three-Way Merge Engine**
@@ -65,5 +81,5 @@
 - [ ] **Milestone 9: Performance Benchmarking & Profiling**
 
 ## Next Recommended Task
-- Proceed to **Milestone 3: Trees and Staging Area (Index)**. Implement the `Tree` object type, deterministic directory traversal, index file format (`.gitlite/index`), atomic index serialization, `gitlite add`, and `gitlite status`.
+- Proceed to **Milestone 4: Commits and History**. Implement the `Commit` object, commit graph links, `gitlite commit -m "..."`, reference updates, and `gitlite log`.
 

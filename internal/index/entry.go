@@ -21,3 +21,4 @@ type Entry struct {
 	// ModTimeUnix is the file modification timestamp in nanoseconds.
 	ModTimeNano int64 `json:"mod_time_nano"`
 }
+

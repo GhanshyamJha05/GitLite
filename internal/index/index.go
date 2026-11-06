@@ -202,3 +202,4 @@ func (idx *Index) WriteTree(store *object.Store) (object.Hash, error) {
 
 	return buildTree(root)
 }
+

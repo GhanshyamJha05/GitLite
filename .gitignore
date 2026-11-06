@@ -26,3 +26,4 @@ go.work
 # GitLite test repositories generated during manual tests
 .gitlite/
 tmp/
+

@@ -32,3 +32,4 @@ jobs:
 
     - name: Build Binary
       run: go build -v -o bin/gitlite ./cmd/gitlite
+
