@@ -51,6 +51,21 @@
   - Arbitrary commit-to-commit tree comparison (`DiffCommits`).
   - CLI command: `gitlite diff` (working tree vs index), `gitlite diff --staged` / `--cached` (index vs HEAD), and `gitlite diff <commit-a> <commit-b>`.
   - Full integration test suite validating working tree, staged, and commit-to-commit unified diff streams.
+- [x] **Milestone 7: Three-Way Merge Engine**
+  - Common ancestor discovery via commit graph BFS DAG traversal (`FindCommonAncestor`).
+  - Fast-forward merge optimization when current HEAD is an ancestor of target.
+  - Line-by-line three-way file merge resolution (`ThreeWayMergeContent`).
+  - Automatic conflict detection and marker generation:
+    ```text
+    <<<<<<< CURRENT
+    ...
+    =======
+    ...
+    >>>>>>> INCOMING
+    ```
+  - Two-parent merge commit synthesis (`parents: [headHash, incomingHash]`).
+  - CLI command: `gitlite merge <branch-or-commit>`.
+  - Full integration tests covering fast-forward merges, 3-way clean merges, and merge conflict marker generation.
 
 ## Current Implementation Status
 - `internal/object`:
@@ -64,6 +79,10 @@
 - `internal/diff`:
   - `algorithm.go`: Line-based Longest Common Subsequence (LCS) edit script generation (`ComputeLCS`) and unified diff formatter (`UnifiedDiff`).
   - `algorithm_test.go`: LCS and unified diff unit tests.
+- `internal/merge`:
+  - `ancestor.go`: Lowest Common Ancestor (LCA) search via BFS over parent commit graphs (`FindCommonAncestor`).
+  - `conflict.go`: Three-way content merger (`ThreeWayMergeContent`) emitting standard conflict markers upon collision.
+  - `merge_test.go`: Ancestor graph and conflict resolution unit tests.
 - `internal/refs`:
   - `refs.go`: Reference manager (`ResolveHead`, `UpdateHead`, `atomicWriteRef`).
   - `branch.go`: Branch operations (`ListBranches`, `CreateBranch`, `DeleteBranch`, `SetHeadBranch`, `SetHeadDetached`, `ResolveBranch`).
@@ -80,6 +99,7 @@
   - `commit.go`: Commit execution pipeline (`Commit`, `Log`, `DefaultSignature`).
   - `checkout.go`: `FlattenTree` and `Checkout` with working tree integrity guards.
   - `diff.go`: Unified diff coordination (`DiffWorkingTreeAgainstIndex`, `DiffIndexAgainstHead`, `DiffCommits`).
+  - `merge.go`: Full 3-way merge orchestrator (`Merge`).
 - `internal/cli`:
   - `root.go`: Cobra root setup.
   - `init.go`: `gitlite init [directory]`.
@@ -91,42 +111,34 @@
   - `branch.go`: `gitlite branch [-d <name>] [name]`.
   - `checkout.go`: `gitlite checkout <branch-or-commit>` & `gitlite switch <branch>`.
   - `diff.go`: `gitlite diff [--staged] [commit-a] [commit-b]`.
+  - `merge.go`: `gitlite merge <branch>`.
 - `tests/integration`:
   - `init_test.go`: Repository initialization integration tests.
   - `staging_test.go`: Add, status, and staging integration tests.
   - `commit_test.go`: End-to-end commit creation, commit ancestry chain logging, and inspection tests.
   - `branch_test.go`: Branch lifecycle, safe checkout, and collision prevention integration tests.
   - `diff_test.go`: Working tree, staged, and commit-to-commit unified diff integration tests.
+  - `merge_test.go`: Clean fast-forward, 3-way merge commits, and merge conflict integration tests.
 
 ## Architectural Decisions
-1. **LCS / Diff Algorithm**:
-   - `ComputeLCS` breaks multiline file streams into discrete lines and performs dynamic-programming longest common subsequence analysis, emitting sequence edits (`OpEqual`, `OpInsert`, `OpDelete`).
-2. **Unified Diff Format**:
-   - Outputs standard unified diff notation (`--- a/path`, `+++ b/path`, `@@ -old,count +new,count @@`, with `-` and `+` line prefixes) compatible with developer expectations and terminal pagers.
-3. **Multi-Source Diffing**:
-   - Compares physically modified files against staged index blobs.
-   - Compares staged index blobs against tree snapshots in `HEAD`.
-   - Compares tree objects between two arbitrary historical commit snapshots.
+1. **Lowest Common Ancestor (LCA)**:
+   - Traverses parent pointers using breadth-first search and ancestor set intersection, correctly identifying split points even after multiple branch divergences.
+2. **Fast-Forward Detection**:
+   - If the LCA equals the current `HEAD` commit, no merge commit is created; `HEAD` simply advances directly to the incoming branch tip.
+3. **Three-Way Merge Matrix**:
+   - Compares each file across Ancestor, Current, and Incoming. Only files with incompatible edits on both sides produce conflict markers.
+4. **Merge Commit Topology**:
+   - Clean non-fast-forward merges create a commit with two parents (`Parents: [headHash, incomingHash]`), properly recorded in the DAG.
 
 ## Outstanding Tasks / Roadmap
-- [ ] **Milestone 7: Three-Way Merge Engine**
-  - Common ancestor discovery via commit graph traversal (BFS / Lowest Common Ancestor).
-  - Three-way file merging: ancestor vs current branch (`HEAD`) vs incoming branch.
-  - Non-conflicting change resolution (independent additions, modifications, deletions).
-  - Conflict detection & standard conflict marker generation:
-    ```text
-    <<<<<<< CURRENT
-    ...
-    =======
-    ...
-    >>>>>>> INCOMING
-    ```
-  - `gitlite merge <branch>` command.
-  - Merge commit creation with two parent hashes (`parent <head> \n parent <incoming>`).
-  - Merge abort (`gitlite merge --abort`) and continuation (`gitlite merge --continue`).
-- [ ] **Milestone 8: Integrity & Recovery (`fsck`)**
+- [ ] **Milestone 8: Data Integrity and Recovery (`fsck`)**
+  - Implement `gitlite fsck` command.
+  - Object store audit: decompress all objects, verify cryptographic hashes, and report corruptions.
+  - Reachability check: verify tree references, commit parents, and ref pointers.
+  - Dangling object detection (unreferenced blobs/trees).
 - [ ] **Milestone 9: Performance Benchmarking & Profiling**
+- [ ] **Milestone 10: Documentation & Release**
 
 ## Next Recommended Task
-- Proceed to **Milestone 7: Three-Way Merge Engine**. Implement common ancestor search across commit DAG, three-way line merge resolution with conflict markers, `gitlite merge`, and merge commit creation.
+- Proceed to **Milestone 8: Data Integrity and Recovery (`fsck`)**. Implement repository verification, object hash validation, tree and commit pointer consistency auditing, and dangling object detection.
 

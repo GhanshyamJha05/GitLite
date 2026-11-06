@@ -69,5 +69,8 @@ var branchCmd = &cobra.Command{
 
 func init() {
 	branchCmd.Flags().StringVarP(&deleteBranchName, "delete", "d", "", "Delete a branch")
+	branchCmd.PostRun = func(cmd *cobra.Command, args []string) {
+		deleteBranchName = ""
+	}
 	rootCmd.AddCommand(branchCmd)
 }
