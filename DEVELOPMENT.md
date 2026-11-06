@@ -35,6 +35,14 @@
   - Full DAG ancestry traversal via `gitlite log`.
   - Detailed commit inspection via `gitlite show [commit-hash]`.
   - Integration tests verifying commit chains, log outputs, and empty staging safeguards.
+- [x] **Milestone 5: Branch Management & Safe Checkout**
+  - Lightweight branch reference creation (`CreateBranch`) and safe deletion (`DeleteBranch`).
+  - Branch listing (`ListBranches`) with active branch indicators (`* \033[32mbranch\033[0m`).
+  - Tree flattening (`FlattenTree`) for directory restoration.
+  - Safe working-tree checkout engine (`Checkout`): compares working tree, index, and target tree to protect uncommitted/untracked user edits (`ErrDirtyWorkingTree`).
+  - Working tree restoration: deletes files not in target commit, writes new/updated files, cleans up empty directories, updates index, and shifts HEAD.
+  - Dual commands: `gitlite checkout <branch-or-commit>` (including detached HEAD) and `gitlite switch <branch>`.
+  - Integration tests verifying branch creation, file swapping between branches, switch back, and dirty tree clobber prevention.
 
 ## Current Implementation Status
 - `internal/object`:
@@ -47,6 +55,7 @@
   - `store_test.go`, `tree_test.go`, `commit_test.go`: Unit tests and write/read memory & throughput benchmarks.
 - `internal/refs`:
   - `refs.go`: Reference manager (`ResolveHead`, `UpdateHead`, `atomicWriteRef`).
+  - `branch.go`: Branch operations (`ListBranches`, `CreateBranch`, `DeleteBranch`, `SetHeadBranch`, `SetHeadDetached`, `ResolveBranch`).
   - `refs_test.go`: Unit test validating unborn branch resolution and atomic pointer progression.
 - `internal/index`:
   - `entry.go`: Staged file record (`Path`, `Hash`, `Mode`, `Size`, `ModTimeNano`).
@@ -58,6 +67,7 @@
   - `staging.go`: Staging engine (`Add`, `stageFile`, path security guards).
   - `status.go`: Working tree scanning & change detection (`Status`).
   - `commit.go`: Commit execution pipeline (`Commit`, `Log`, `DefaultSignature`).
+  - `checkout.go`: `FlattenTree` and `Checkout` with working tree integrity guards.
 - `internal/cli`:
   - `root.go`: Cobra root setup.
   - `init.go`: `gitlite init [directory]`.
@@ -66,34 +76,35 @@
   - `commit.go`: `gitlite commit -m "<message>"`.
   - `log.go`: `gitlite log`.
   - `show.go`: `gitlite show [commit]`.
+  - `branch.go`: `gitlite branch [-d <name>] [name]`.
+  - `checkout.go`: `gitlite checkout <branch-or-commit>` & `gitlite switch <branch>`.
 - `tests/integration`:
   - `init_test.go`: Repository initialization integration tests.
   - `staging_test.go`: Add, status, and staging integration tests.
   - `commit_test.go`: End-to-end commit creation, commit ancestry chain logging, and inspection tests.
+  - `branch_test.go`: Branch lifecycle, safe checkout, and collision prevention integration tests.
 
 ## Architectural Decisions
-1. **Commit Object Invariant**:
-   - Commits contain a pointer to the root `Tree`, not individual file diffs. Every commit is a full, self-contained repository snapshot.
-2. **Deterministic Signatures**:
-   - `Signature` standardizes POSIX timestamp and timezone offset strings (`+0530`), guaranteeing reproducibility.
-3. **Reference Safety**:
-   - `refs.Manager` writes branch heads to temp files before replacing target refs atomically, eliminating dangling branch heads during crash events.
-4. **Graph Traversal**:
-   - `Log` performs first-parent commit chain traversal back to the root commit, with cycle detection guardrails.
+1. **Lightweight Branch Pointers**:
+   - Branches are simple 65-byte files (`<hash>\n`) under `.gitlite/refs/heads/<name>`.
+2. **Checkout Safety Invariants**:
+   - GitLite guarantees user data preservation during checkouts: if a file in the working tree is untracked or has uncommitted edits and would be overwritten by the destination commit's tree, `Checkout` aborts immediately with `ErrDirtyWorkingTree`.
+3. **Symbolic vs Detached HEAD**:
+   - When pointing to a branch: `.gitlite/HEAD` contains `ref: refs/heads/<branch>\n`.
+   - When checking out a raw commit: `.gitlite/HEAD` contains the 64-char commit hash directly.
 
 ## Outstanding Tasks / Roadmap
-- [ ] **Milestone 5: Branch Management & Checkout**
-  - Create branches: `gitlite branch <name>`.
-  - List branches: `gitlite branch` (highlight active branch).
-  - Delete branches: `gitlite branch -d <name>`.
-  - Branch switching & Working-tree restoration: `gitlite checkout <branch>` / `gitlite switch <branch>`.
-  - Dirty working-tree protection (never overwrite uncommitted local edits).
-  - Detached HEAD support.
 - [ ] **Milestone 6: Diff Engine**
+  - Line-based difference comparison.
+  - Myers diff algorithm / Longest Common Subsequence (LCS).
+  - Unified diff format output (`--- a/... +++ b/... @@ -1,3 +1,3 @@`).
+  - `gitlite diff` (working tree vs staged index).
+  - `gitlite diff --staged` (index vs HEAD commit).
+  - `gitlite diff <commit-a> <commit-b>`.
 - [ ] **Milestone 7: Three-Way Merge Engine**
 - [ ] **Milestone 8: Integrity & Recovery (`fsck`)**
 - [ ] **Milestone 9: Performance Benchmarking & Profiling**
 
 ## Next Recommended Task
-- Proceed to **Milestone 5: Branch Management & Checkout**. Implement branch creation, branch listing, branch deletion, safe tree-to-working-directory checkout, and dirty working-tree safeguards.
+- Proceed to **Milestone 6: Diff Engine**. Implement Myers diff / LCS algorithm, unified diff formatter, working tree vs index comparison, staged index vs HEAD comparison, and arbitrary commit-to-commit diffing.
 
