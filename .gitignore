@@ -1,0 +1,28 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+pprof/
+
+# Go workspace & vendor
+vendor/
+go.work
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# GitLite test repositories generated during manual tests
+.gitlite/
+tmp/
