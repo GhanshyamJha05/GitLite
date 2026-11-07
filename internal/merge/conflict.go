@@ -109,7 +109,7 @@ func mergeChanges(baseLines []string, curChanges, incChanges []LineChange) FileM
 		if nextCur && nextInc && changesOverlap(*curCh, *incCh) {
 			// Group all transitively overlapping changes
 			overlapCur, overlapInc, nextCurI, nextIncI := collectOverlappingGroup(curChanges, incChanges, curI, incI)
-			
+
 			groupStart := overlapCur[0].BaseStart
 			if overlapInc[0].BaseStart < groupStart {
 				groupStart = overlapInc[0].BaseStart

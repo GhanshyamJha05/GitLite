@@ -197,4 +197,3 @@ func (s *Store) ReadCommit(h Hash) (*Commit, error) {
 	}
 	return ParseCommit(content)
 }
-

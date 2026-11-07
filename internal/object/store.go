@@ -165,4 +165,3 @@ func (s *Store) Verify(h Hash) error {
 	_, _, err := s.Read(h)
 	return err
 }
-

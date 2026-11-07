@@ -59,4 +59,3 @@ func TestCLIInit(t *testing.T) {
 		t.Fatalf("expected error when reinitializing, got nil")
 	}
 }
-

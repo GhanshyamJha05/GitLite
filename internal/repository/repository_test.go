@@ -116,4 +116,3 @@ func TestDiscover(t *testing.T) {
 		t.Errorf("expected %s, got %s", repo.WorkTree, discoveredSub.WorkTree)
 	}
 }
-

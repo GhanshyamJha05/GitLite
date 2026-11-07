@@ -62,4 +62,3 @@ func TestCommitSerializationAndParsing(t *testing.T) {
 		t.Errorf("message mismatch: expected %q, got %q", expectedMsg, readCommit.Message)
 	}
 }
-

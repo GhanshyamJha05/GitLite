@@ -29,4 +29,3 @@ func Execute() {
 func GetRootCmd() *cobra.Command {
 	return rootCmd
 }
-

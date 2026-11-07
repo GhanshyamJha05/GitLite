@@ -59,4 +59,3 @@ func TestTreeSerializationAndParsing(t *testing.T) {
 		t.Errorf("serialized payloads do not match")
 	}
 }
-

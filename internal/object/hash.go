@@ -37,4 +37,3 @@ func ComputeHash(data []byte) Hash {
 func (h Hash) String() string {
 	return string(h)
 }
-

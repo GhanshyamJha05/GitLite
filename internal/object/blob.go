@@ -22,4 +22,3 @@ func (b *Blob) Type() Type {
 func (b *Blob) SerializeContent() []byte {
 	return b.Data
 }
-

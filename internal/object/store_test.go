@@ -21,7 +21,7 @@ func TestHashValidation(t *testing.T) {
 		"abc",
 		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85",   // 63 chars
 		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855a", // 65 chars
-		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85G", // uppercase / non-hex
+		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85G",  // uppercase / non-hex
 	}
 
 	for _, inv := range invalidLengths {

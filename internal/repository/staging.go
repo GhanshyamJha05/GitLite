@@ -129,4 +129,3 @@ func (r *Repository) stageFile(idx *index.Index, absFilePath string) error {
 
 	return nil
 }
-

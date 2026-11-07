@@ -127,4 +127,3 @@ func (m *Manager) atomicWriteRef(targetPath string, h object.Hash) error {
 	payload := []byte(fmt.Sprintf("%s\n", h))
 	return m.AtomicWriteFile(targetPath, payload)
 }
-

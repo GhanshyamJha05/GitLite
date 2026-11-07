@@ -45,4 +45,3 @@ func Discover(startDir string) (*Repository, error) {
 
 	return nil, ErrRepositoryNotFound
 }
-

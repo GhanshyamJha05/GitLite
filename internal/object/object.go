@@ -84,4 +84,3 @@ func DecodeCanonical(data []byte) (Type, []byte, error) {
 		return "", nil, fmt.Errorf("%w: %q", ErrUnknownType, objTypeStr)
 	}
 }
-

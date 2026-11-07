@@ -108,4 +108,3 @@ func Init(targetPath string) (*Repository, error) {
 		Store:      object.NewStore(filepath.Join(gitliteDir, ObjectsDir)),
 	}, nil
 }
-

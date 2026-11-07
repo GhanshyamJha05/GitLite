@@ -22,10 +22,10 @@ var (
 
 // MergeResult encapsulates the outcome of a branch merge.
 type MergeResult struct {
-	FastForward   bool
-	MergeCommit   object.Hash
-	Conflicts     []string
-	MergedFiles   []string
+	FastForward bool
+	MergeCommit object.Hash
+	Conflicts   []string
+	MergedFiles []string
 }
 
 // Merge merges targetBranchOrCommit into the currently checked-out branch.
