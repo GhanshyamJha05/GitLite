@@ -11,3 +11,4 @@ linters:
     - revive
     - gofmt
     - goimports
+
