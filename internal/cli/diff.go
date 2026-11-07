@@ -3,9 +3,10 @@ package cli
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"gitlite/internal/object"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 var diffStaged bool

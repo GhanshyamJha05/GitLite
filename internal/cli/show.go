@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"gitlite/internal/object"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 var showCmd = &cobra.Command{

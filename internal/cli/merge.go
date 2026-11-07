@@ -3,8 +3,9 @@ package cli
 import (
 	"errors"
 
-	"github.com/spf13/cobra"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 var mergeCmd = &cobra.Command{

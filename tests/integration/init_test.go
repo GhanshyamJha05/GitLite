@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"gitlite/internal/cli"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 func executeCommand(args ...string) (string, error) {

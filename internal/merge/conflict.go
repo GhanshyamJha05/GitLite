@@ -122,7 +122,6 @@ func mergeChanges(baseLines []string, curChanges, incChanges []LineChange) FileM
 			// Add base lines up to groupStart
 			if baseIdx < groupStart {
 				resultLines = append(resultLines, baseLines[baseIdx:groupStart]...)
-				baseIdx = groupStart
 			}
 
 			// Reconstruct side contents for the region [groupStart, groupEnd]

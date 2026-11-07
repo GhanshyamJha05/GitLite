@@ -3,8 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 var commitMsg string

@@ -3,9 +3,10 @@ package cli
 import (
 	"strings"
 
-	"github.com/spf13/cobra"
 	"gitlite/internal/refs"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 var logCmd = &cobra.Command{

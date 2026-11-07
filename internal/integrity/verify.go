@@ -52,10 +52,6 @@ func Fsck(repo *repository.Repository) (*Report, error) {
 		}
 		// Expected relative path: "ab/cdef..."
 		norm := filepath.ToSlash(rel)
-		parts := filepath.SplitList(norm)
-		if len(parts) == 0 {
-			parts = []string{norm}
-		}
 
 		cleanHex := ""
 		for _, r := range norm {

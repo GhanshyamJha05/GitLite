@@ -1,8 +1,9 @@
 package cli
 
 import (
-	"github.com/spf13/cobra"
 	"gitlite/internal/repository"
+
+	"github.com/spf13/cobra"
 )
 
 var checkoutCmd = &cobra.Command{
