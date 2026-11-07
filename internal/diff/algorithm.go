@@ -77,7 +77,8 @@ func ComputeLCS(aText, bText string) []Edit {
 	return edits
 }
 
-func splitLines(s string) []string {
+// SplitLines splits a string into lines, normalizing CRLF to LF and stripping a trailing empty line.
+func SplitLines(s string) []string {
 	if s == "" {
 		return nil
 	}
@@ -92,7 +93,20 @@ func splitLines(s string) []string {
 	return lines
 }
 
-// UnifiedDiff formats line edits into standard unified diff format with header and chunk markers.
+func splitLines(s string) []string {
+	return SplitLines(s)
+}
+
+// Hunk represents a cohesive block of diff edits with line numbers.
+type Hunk struct {
+	AStart int
+	ACount int
+	BStart int
+	BCount int
+	Edits  []Edit
+}
+
+// UnifiedDiff formats line edits into standard unified diff format with header and per-hunk line ranges.
 func UnifiedDiff(pathA, pathB string, aText, bText string) string {
 	edits := ComputeLCS(aText, bText)
 	if len(edits) == 0 {
@@ -110,25 +124,143 @@ func UnifiedDiff(pathA, pathB string, aText, bText string) string {
 		return ""
 	}
 
+	hunks := groupHunks(edits, 3)
+	if len(hunks) == 0 {
+		return ""
+	}
+
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("--- a/%s\n", pathA))
 	sb.WriteString(fmt.Sprintf("+++ b/%s\n", pathB))
 
-	// For simplicity and clarity in initial diffs, write a single contiguous unified hunk
-	aCount := len(splitLines(aText))
-	bCount := len(splitLines(bText))
-
-	sb.WriteString(fmt.Sprintf("@@ -1,%d +1,%d @@\n", aCount, bCount))
-	for _, edit := range edits {
-		switch edit.Type {
-		case OpEqual:
-			sb.WriteString(fmt.Sprintf(" %s\n", edit.Text))
-		case OpInsert:
-			sb.WriteString(fmt.Sprintf("+%s\n", edit.Text))
-		case OpDelete:
-			sb.WriteString(fmt.Sprintf("-%s\n", edit.Text))
+	for _, h := range hunks {
+		sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", h.AStart, h.ACount, h.BStart, h.BCount))
+		for _, edit := range h.Edits {
+			switch edit.Type {
+			case OpEqual:
+				sb.WriteString(fmt.Sprintf(" %s\n", edit.Text))
+			case OpInsert:
+				sb.WriteString(fmt.Sprintf("+%s\n", edit.Text))
+			case OpDelete:
+				sb.WriteString(fmt.Sprintf("-%s\n", edit.Text))
+			}
 		}
 	}
 
 	return sb.String()
+}
+
+type diffOp struct {
+	edit Edit
+	aIdx int // 1-based line number in A (0 if insertion)
+	bIdx int // 1-based line number in B (0 if deletion)
+}
+
+// groupHunks groups diff edits into separate hunks separated by unchanged context lines.
+func groupHunks(edits []Edit, contextLines int) []Hunk {
+	var ops []diffOp
+	aNum := 1
+	bNum := 1
+
+	for _, e := range edits {
+		op := diffOp{edit: e}
+		switch e.Type {
+		case OpEqual:
+			op.aIdx = aNum
+			op.bIdx = bNum
+			aNum++
+			bNum++
+		case OpDelete:
+			op.aIdx = aNum
+			aNum++
+		case OpInsert:
+			op.bIdx = bNum
+			bNum++
+		}
+		ops = append(ops, op)
+	}
+
+	// Identify indices of modified operations (inserts and deletes)
+	var changeIndices []int
+	for idx, op := range ops {
+		if op.edit.Type != OpEqual {
+			changeIndices = append(changeIndices, idx)
+		}
+	}
+
+	if len(changeIndices) == 0 {
+		return nil
+	}
+
+	var hunks []Hunk
+	startChange := changeIndices[0]
+	endChange := changeIndices[0]
+
+	for i := 1; i < len(changeIndices); i++ {
+		idx := changeIndices[i]
+		// Distance in equal lines between changes
+		if idx-endChange <= 2*contextLines+1 {
+			endChange = idx
+		} else {
+			// Flush current hunk
+			h := buildHunk(ops, startChange, endChange, contextLines)
+			hunks = append(hunks, h)
+			startChange = idx
+			endChange = idx
+		}
+	}
+	// Flush last hunk
+	h := buildHunk(ops, startChange, endChange, contextLines)
+	hunks = append(hunks, h)
+
+	return hunks
+}
+
+func buildHunk(ops []diffOp, firstChange, lastChange, contextLines int) Hunk {
+	start := firstChange - contextLines
+	if start < 0 {
+		start = 0
+	}
+	end := lastChange + contextLines + 1
+	if end > len(ops) {
+		end = len(ops)
+	}
+
+	slice := ops[start:end]
+	var edits []Edit
+	aCount := 0
+	bCount := 0
+	aStart := 0
+	bStart := 0
+
+	for _, op := range slice {
+		edits = append(edits, op.edit)
+		if op.edit.Type == OpEqual || op.edit.Type == OpDelete {
+			if aStart == 0 {
+				aStart = op.aIdx
+			}
+			aCount++
+		}
+		if op.edit.Type == OpEqual || op.edit.Type == OpInsert {
+			if bStart == 0 {
+				bStart = op.bIdx
+			}
+			bCount++
+		}
+	}
+
+	if aStart == 0 {
+		aStart = 1
+	}
+	if bStart == 0 {
+		bStart = 1
+	}
+
+	return Hunk{
+		AStart: aStart,
+		ACount: aCount,
+		BStart: bStart,
+		BCount: bCount,
+		Edits:  edits,
+	}
 }

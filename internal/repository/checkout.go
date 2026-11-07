@@ -99,7 +99,10 @@ func (r *Repository) Checkout(target string) error {
 			}
 			// Check if file has local uncommitted modifications
 			if info.Size() != entry.Size || info.ModTime().UnixNano() != entry.ModTimeNano {
-				data, _ := os.ReadFile(fullPath)
+				data, err := os.ReadFile(fullPath)
+				if err != nil {
+					return fmt.Errorf("reading working tree file %s: %w", fullPath, err)
+				}
 				blob := object.NewBlob(data)
 				canonical := object.EncodeCanonical(blob)
 				if object.ComputeHash(canonical) != entry.Hash {

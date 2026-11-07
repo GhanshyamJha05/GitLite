@@ -17,7 +17,32 @@ var (
 
 	// ErrCannotDeleteCurrentBranch is returned when trying to delete the currently checked-out branch.
 	ErrCannotDeleteCurrentBranch = fmt.Errorf("cannot delete the currently checked-out branch")
+
+	// ErrInvalidBranchName is returned when a branch name contains invalid characters.
+	ErrInvalidBranchName = fmt.Errorf("invalid branch name")
 )
+
+// ValidateBranchName checks whether a branch name is safe and valid.
+// It rejects names containing "..", "/", "\", spaces, control characters, or starting with "-".
+func ValidateBranchName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("%w: name cannot be empty", ErrInvalidBranchName)
+	}
+	if strings.HasPrefix(name, "-") || strings.HasPrefix(name, ".") {
+		return fmt.Errorf("%w: name cannot begin with '-' or '.'", ErrInvalidBranchName)
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("%w: name cannot contain '..'", ErrInvalidBranchName)
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("%w: name cannot contain slashes or backslashes", ErrInvalidBranchName)
+	}
+	if strings.ContainsAny(name, " \t\r\n~^:?*[]@{") {
+		return fmt.Errorf("%w: name contains invalid characters", ErrInvalidBranchName)
+	}
+	return nil
+}
 
 // BranchInfo contains metadata about a branch reference.
 type BranchInfo struct {
@@ -77,6 +102,10 @@ func (m *Manager) ListBranches() ([]BranchInfo, error) {
 
 // CreateBranch creates a new branch pointing to the specified commit hash.
 func (m *Manager) CreateBranch(name string, targetCommit object.Hash) error {
+	if err := ValidateBranchName(name); err != nil {
+		return err
+	}
+
 	if err := targetCommit.Validate(); err != nil {
 		return fmt.Errorf("validating target commit: %w", err)
 	}
@@ -104,21 +133,24 @@ func (m *Manager) DeleteBranch(name string) error {
 	return os.Remove(branchPath)
 }
 
-// SetHeadBranch updates HEAD to point symbolically to a branch (ref: refs/heads/<branch>).
+// SetHeadBranch updates HEAD to point symbolically to a branch (ref: refs/heads/<branch>) atomically.
 func (m *Manager) SetHeadBranch(name string) error {
+	if err := ValidateBranchName(name); err != nil {
+		return err
+	}
 	headPath := filepath.Join(m.gitliteDir, "HEAD")
-	content := fmt.Sprintf("ref: refs/heads/%s\n", name)
-	return os.WriteFile(headPath, []byte(content), 0644)
+	content := []byte(fmt.Sprintf("ref: refs/heads/%s\n", name))
+	return m.AtomicWriteFile(headPath, content)
 }
 
-// SetHeadDetached updates HEAD to point directly to a commit hash (detached HEAD state).
+// SetHeadDetached updates HEAD to point directly to a commit hash (detached HEAD state) atomically.
 func (m *Manager) SetHeadDetached(h object.Hash) error {
 	if err := h.Validate(); err != nil {
 		return fmt.Errorf("validating commit hash: %w", err)
 	}
 	headPath := filepath.Join(m.gitliteDir, "HEAD")
-	content := fmt.Sprintf("%s\n", h)
-	return os.WriteFile(headPath, []byte(content), 0644)
+	content := []byte(fmt.Sprintf("%s\n", h))
+	return m.AtomicWriteFile(headPath, content)
 }
 
 // ResolveBranch resolves a branch name to its commit hash.

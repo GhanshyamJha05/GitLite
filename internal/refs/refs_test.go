@@ -57,4 +57,44 @@ func TestRefResolutionAndAtomicUpdate(t *testing.T) {
 	if err != nil || headHash != commit2 {
 		t.Fatalf("expected HEAD to advance to %s, got %s", commit2, headHash)
 	}
+
+	// Test branch sanitization
+	invalidNames := []string{
+		"../escape",
+		"feat/sub",
+		"feat\\sub",
+		"branch with space",
+		"-leadingdash",
+		".hidden",
+		"branch..double",
+		"",
+	}
+
+	for _, badName := range invalidNames {
+		if err := mgr.CreateBranch(badName, commit2); err == nil {
+			t.Errorf("expected error creating branch with invalid name %q, got nil", badName)
+		}
+	}
+
+	// Valid branch name
+	if err := mgr.CreateBranch("feature-123", commit2); err != nil {
+		t.Fatalf("expected valid branch creation to succeed, got %v", err)
+	}
+
+	// Atomic SetHeadBranch and SetHeadDetached
+	if err := mgr.SetHeadBranch("feature-123"); err != nil {
+		t.Fatalf("SetHeadBranch failed: %v", err)
+	}
+	_, currentBranch, _ := mgr.ResolveHead()
+	if currentBranch != "feature-123" {
+		t.Errorf("expected branch feature-123, got %s", currentBranch)
+	}
+
+	if err := mgr.SetHeadDetached(commit2); err != nil {
+		t.Fatalf("SetHeadDetached failed: %v", err)
+	}
+	h, branch, err := mgr.ResolveHead()
+	if err != nil || branch != "" || h != commit2 {
+		t.Errorf("expected detached HEAD pointing to %s, got hash=%s branch=%s", commit2, h, branch)
+	}
 }

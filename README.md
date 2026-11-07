@@ -1,6 +1,7 @@
 # GitLite — Distributed Version Control System from Scratch in Go
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/GhanshyamJha05/GitLite)](https://goreportcard.com/report/github.com/GhanshyamJha05/GitLite)
+[![CI Status](https://github.com/GhanshyamJha05/GitLite/actions/workflows/ci.yml/badge.svg)](https://github.com/GhanshyamJha05/GitLite/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.27.3-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 GitLite is an independent, production-grade distributed version control system engineered entirely from scratch in Go (without external Git dependencies or wrappers). It implements the core algorithmic principles and systems primitives that underpin modern source code management:

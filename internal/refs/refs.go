@@ -91,35 +91,40 @@ func (m *Manager) UpdateHead(newHash object.Hash) error {
 	return m.atomicWriteRef(headPath, newHash)
 }
 
-// atomicWriteRef safely writes a ref using a temporary file and atomic rename.
-func (m *Manager) atomicWriteRef(targetPath string, h object.Hash) error {
+// AtomicWriteFile safely writes content to targetPath using a temporary file and atomic rename.
+func (m *Manager) AtomicWriteFile(targetPath string, content []byte) error {
 	parent := filepath.Dir(targetPath)
 	if err := os.MkdirAll(parent, 0755); err != nil {
-		return fmt.Errorf("creating ref directory %s: %w", parent, err)
+		return fmt.Errorf("creating parent directory %s: %w", parent, err)
 	}
 
 	tmpFile, err := os.CreateTemp(parent, "tmp_ref_*")
 	if err != nil {
-		return fmt.Errorf("creating temp ref file: %w", err)
+		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpName := tmpFile.Name()
 	defer func() {
 		_ = os.Remove(tmpName)
 	}()
 
-	payload := fmt.Sprintf("%s\n", h)
-	if _, err := tmpFile.WriteString(payload); err != nil {
+	if _, err := tmpFile.Write(content); err != nil {
 		_ = tmpFile.Close()
-		return fmt.Errorf("writing ref payload: %w", err)
+		return fmt.Errorf("writing content: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("closing temp ref file: %w", err)
+		return fmt.Errorf("closing temp file: %w", err)
 	}
 
 	if err := os.Rename(tmpName, targetPath); err != nil {
-		return fmt.Errorf("committing ref file: %w", err)
+		return fmt.Errorf("committing file: %w", err)
 	}
 
 	return nil
+}
+
+// atomicWriteRef safely writes a ref using AtomicWriteFile.
+func (m *Manager) atomicWriteRef(targetPath string, h object.Hash) error {
+	payload := []byte(fmt.Sprintf("%s\n", h))
+	return m.AtomicWriteFile(targetPath, payload)
 }
 

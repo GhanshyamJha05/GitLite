@@ -53,4 +53,21 @@ func TestUnifiedDiff(t *testing.T) {
 	if identical != "" {
 		t.Errorf("expected empty diff for identical inputs, got: %s", identical)
 	}
+
+	// Multiple hunks separated by > 2*context lines (default contextLines=3)
+	textA := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15\nL16\nL17\nL18\nL19\nL20\n"
+	textB := "L1 mod\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15\nL16\nL17\nL18\nL19\nL20 mod\n"
+
+	multiHunkDiff := diff.UnifiedDiff("file.txt", "file.txt", textA, textB)
+	// Should have two separate @@ hunk headers
+	hunkCount := strings.Count(multiHunkDiff, "@@ ")
+	if hunkCount != 2 {
+		t.Errorf("expected 2 distinct hunks, got %d:\n%s", hunkCount, multiHunkDiff)
+	}
+	if !strings.Contains(multiHunkDiff, "@@ -1,4 +1,4 @@") {
+		t.Errorf("expected first hunk to target line 1, got:\n%s", multiHunkDiff)
+	}
+	if !strings.Contains(multiHunkDiff, "-L1\n+L1 mod") || !strings.Contains(multiHunkDiff, "-L20\n+L20 mod") {
+		t.Errorf("expected hunk modifications for both L1 and L20:\n%s", multiHunkDiff)
+	}
 }

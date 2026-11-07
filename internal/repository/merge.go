@@ -150,22 +150,25 @@ func (r *Repository) Merge(target string) (*MergeResult, error) {
 		var baseText, headText, incText string
 
 		if inBase {
-			b, _ := r.Store.ReadBlob(baseEntry.Hash)
-			if b != nil {
-				baseText = string(b.Data)
+			b, err := r.Store.ReadBlob(baseEntry.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("reading base blob %s for %s: %w", baseEntry.Hash, path, err)
 			}
+			baseText = string(b.Data)
 		}
 		if inHead {
-			b, _ := r.Store.ReadBlob(headEntry.Hash)
-			if b != nil {
-				headText = string(b.Data)
+			b, err := r.Store.ReadBlob(headEntry.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("reading head blob %s for %s: %w", headEntry.Hash, path, err)
 			}
+			headText = string(b.Data)
 		}
 		if inInc {
-			b, _ := r.Store.ReadBlob(incEntry.Hash)
-			if b != nil {
-				incText = string(b.Data)
+			b, err := r.Store.ReadBlob(incEntry.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("reading incoming blob %s for %s: %w", incEntry.Hash, path, err)
 			}
+			incText = string(b.Data)
 		}
 
 		fullPath := filepath.Join(r.WorkTree, filepath.FromSlash(path))

@@ -70,4 +70,18 @@ func TestThreeWayMergeContent(t *testing.T) {
 	if !strings.Contains(confRes.Content, "<<<<<<< CURRENT") || !strings.Contains(confRes.Content, "=======") || !strings.Contains(confRes.Content, ">>>>>>> INCOMING") {
 		t.Errorf("missing conflict markers in merged output:\n%s", confRes.Content)
 	}
+
+	// Non-overlapping changes on different lines: both should be cleanly merged without conflict
+	baseText := "header\nsection 1\nmiddle\nsection 2\nfooter\n"
+	curText := "header\nsection 1 updated by current\nmiddle\nsection 2\nfooter\n"
+	incText := "header\nsection 1\nmiddle\nsection 2 updated by incoming\nfooter\n"
+	expectedMerged := "header\nsection 1 updated by current\nmiddle\nsection 2 updated by incoming\nfooter\n"
+
+	cleanNonOverlappingRes := merge.ThreeWayMergeContent(baseText, curText, incText)
+	if cleanNonOverlappingRes.Conflict {
+		t.Errorf("expected clean 3-way merge for non-overlapping edits, but got conflict:\n%s", cleanNonOverlappingRes.Content)
+	}
+	if cleanNonOverlappingRes.Content != expectedMerged {
+		t.Errorf("expected merged content:\n%q\ngot:\n%q", expectedMerged, cleanNonOverlappingRes.Content)
+	}
 }
