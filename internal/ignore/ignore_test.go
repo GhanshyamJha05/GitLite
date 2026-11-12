@@ -60,4 +60,3 @@ func TestIgnoreLoadFile(t *testing.T) {
 		t.Errorf("expected node_modules dir to be ignored")
 	}
 }
-
