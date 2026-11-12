@@ -24,3 +24,4 @@ func (r *Repository) IgnoreMatcher() (*ignore.Matcher, error) {
 
 	return matcher, nil
 }
+

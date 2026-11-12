@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"gitlite/internal/journal"
 	"gitlite/internal/object"
 	"gitlite/internal/refs"
 )
@@ -87,6 +88,9 @@ func (r *Repository) Commit(message string, author, committer object.Signature) 
 		return "", ErrNothingToCommit
 	}
 
+	// Snapshot state before commit for time-traveling undo
+	snap, snapErr := r.SnapshotState(journal.ActionCommit, fmt.Sprintf("commit %q", message))
+
 	// 1. Build and write root tree object
 	rootTreeHash, err := idx.WriteTree(r.Store)
 	if err != nil {
@@ -112,6 +116,11 @@ func (r *Repository) Commit(message string, author, committer object.Signature) 
 	// 4. Atomically update HEAD (or active branch)
 	if err := refMgr.UpdateHead(commitHash); err != nil {
 		return "", fmt.Errorf("updating HEAD reference: %w", err)
+	}
+
+	// Record to journal if snapshot succeeded
+	if snapErr == nil && snap != nil {
+		_ = r.Journal().Record(*snap)
 	}
 
 	return commitHash, nil

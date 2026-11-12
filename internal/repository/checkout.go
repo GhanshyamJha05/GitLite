@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gitlite/internal/index"
+	"gitlite/internal/journal"
 	"gitlite/internal/object"
 )
 
@@ -53,6 +54,8 @@ func FlattenTree(store *object.Store, rootTreeHash object.Hash) (map[string]obje
 
 // Checkout checks out a branch name or commit hash safely into the working tree.
 func (r *Repository) Checkout(target string) error {
+	snap, snapErr := r.SnapshotState(journal.ActionCheckout, fmt.Sprintf("checkout %s", target))
+
 	refMgr := r.Refs()
 
 	// 1. Resolve target to commit hash
@@ -186,6 +189,10 @@ func (r *Repository) Checkout(target string) error {
 		if err := refMgr.SetHeadDetached(targetCommitHash); err != nil {
 			return fmt.Errorf("updating HEAD to detached commit %s: %w", targetCommitHash, err)
 		}
+	}
+
+	if snapErr == nil && snap != nil {
+		_ = r.Journal().Record(*snap)
 	}
 
 	return nil

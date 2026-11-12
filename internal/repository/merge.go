@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"gitlite/internal/index"
+	"gitlite/internal/journal"
 	"gitlite/internal/merge"
 	"gitlite/internal/object"
 )
@@ -30,6 +31,8 @@ type MergeResult struct {
 
 // Merge merges targetBranchOrCommit into the currently checked-out branch.
 func (r *Repository) Merge(target string) (*MergeResult, error) {
+	snap, snapErr := r.SnapshotState(journal.ActionMerge, fmt.Sprintf("merge %s", target))
+
 	refMgr := r.Refs()
 
 	// 1. Resolve current HEAD
@@ -255,6 +258,10 @@ func (r *Repository) Merge(target string) (*MergeResult, error) {
 
 	if err := refMgr.UpdateHead(mergeCommitHash); err != nil {
 		return nil, err
+	}
+
+	if snapErr == nil && snap != nil {
+		_ = r.Journal().Record(*snap)
 	}
 
 	return &MergeResult{
