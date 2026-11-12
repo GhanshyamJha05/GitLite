@@ -28,6 +28,12 @@ const (
 	// ConfigFile is the repository configuration file.
 	ConfigFile = "config"
 
+	// GitLiteIgnoreFile is the default ignore filename.
+	GitLiteIgnoreFile = ".gitliteignore"
+
+	// GitIgnoreFile is the fallback standard git ignore filename.
+	GitIgnoreFile = ".gitignore"
+
 	// DefaultBranch is the default branch created on repository initialization.
 	DefaultBranch = "main"
 

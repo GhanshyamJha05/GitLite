@@ -52,6 +52,11 @@ func (r *Repository) Add(relOrAbsPath string) error {
 		return fmt.Errorf("loading index: %w", err)
 	}
 
+	ignoreMatcher, err := r.IgnoreMatcher()
+	if err != nil {
+		return fmt.Errorf("loading ignore rules: %w", err)
+	}
+
 	info, err := os.Stat(targetAbs)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -82,12 +87,25 @@ func (r *Repository) Add(relOrAbsPath string) error {
 				return walkErr
 			}
 
-			// Skip .gitlite directory
-			if d.IsDir() && d.Name() == DotGitLite {
+			// Skip .gitlite and .git directory
+			if d.IsDir() && (d.Name() == DotGitLite || d.Name() == ".git") {
 				return filepath.SkipDir
 			}
 
+			rel, err := filepath.Rel(r.WorkTree, path)
+			if err != nil {
+				return err
+			}
+			normRelPath := filepath.ToSlash(rel)
+
 			if d.IsDir() {
+				if normRelPath != "." && ignoreMatcher.Matches(normRelPath, true) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			if ignoreMatcher.Matches(normRelPath, false) {
 				return nil
 			}
 
@@ -97,6 +115,12 @@ func (r *Repository) Add(relOrAbsPath string) error {
 			return fmt.Errorf("walking directory %s: %w", targetAbs, err)
 		}
 	} else {
+		// If explicitly adding a single file, only skip if ignored and not already tracked
+		if ignoreMatcher.Matches(normRel, false) {
+			if _, tracked := idx.Get(normRel); !tracked {
+				return nil
+			}
+		}
 		if err := r.stageFile(idx, targetAbs); err != nil {
 			return err
 		}

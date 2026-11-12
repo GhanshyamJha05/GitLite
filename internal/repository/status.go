@@ -37,6 +37,11 @@ func (r *Repository) Status() (*StatusResult, error) {
 	result := &StatusResult{}
 	workTreeFiles := make(map[string]os.FileInfo)
 
+	ignoreMatcher, err := r.IgnoreMatcher()
+	if err != nil {
+		return nil, fmt.Errorf("loading ignore rules: %w", err)
+	}
+
 	// Scan working tree
 	err = filepath.WalkDir(r.WorkTree, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -47,7 +52,6 @@ func (r *Repository) Status() (*StatusResult, error) {
 			if d.Name() == DotGitLite || d.Name() == ".git" {
 				return filepath.SkipDir
 			}
-			return nil
 		}
 
 		relPath, err := filepath.Rel(r.WorkTree, path)
@@ -55,6 +59,20 @@ func (r *Repository) Status() (*StatusResult, error) {
 			return err
 		}
 		normPath := filepath.ToSlash(relPath)
+
+		if d.IsDir() {
+			if normPath != "." && ignoreMatcher.Matches(normPath, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// If untracked and matches ignore pattern, omit from untracked list
+		if _, staged := idx.Get(normPath); !staged {
+			if ignoreMatcher.Matches(normPath, false) {
+				return nil
+			}
+		}
 
 		info, err := d.Info()
 		if err != nil {
