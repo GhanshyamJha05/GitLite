@@ -112,8 +112,6 @@ func (s *Store) Write(obj Object) (Hash, error) {
 	}
 
 	return "", fmt.Errorf("persisting object file: %w", renameErr)
-
-	return h, nil
 }
 
 // Read decompresses and reads the raw canonical object bytes, verifies its integrity,
