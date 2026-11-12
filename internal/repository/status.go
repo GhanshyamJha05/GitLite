@@ -99,15 +99,38 @@ func (r *Repository) Status() (*StatusResult, error) {
 		}
 	}
 
-	// Staged items currently in the index (until Phase 4 commit diffing separates staged new vs modified vs HEAD)
+	// 3. Compare index against HEAD commit to categorize staged changes
+	headHash, _, err := r.Refs().ResolveHead()
+	headFiles := make(map[string]object.TreeEntry)
+	if err == nil && headHash != "" {
+		if headCommit, err := r.Store.ReadCommit(headHash); err == nil {
+			if hf, err := FlattenTree(r.Store, headCommit.TreeHash); err == nil {
+				headFiles = hf
+			}
+		}
+	}
+
 	for _, entry := range idx.SortedEntries() {
-		result.StagedNew = append(result.StagedNew, entry.Path)
+		headEntry, inHead := headFiles[entry.Path]
+		if !inHead {
+			result.StagedNew = append(result.StagedNew, entry.Path)
+		} else if headEntry.Hash != entry.Hash || headEntry.Mode != entry.Mode {
+			result.StagedModified = append(result.StagedModified, entry.Path)
+		}
+	}
+
+	for headPath := range headFiles {
+		if _, inIndex := idx.Get(headPath); !inIndex {
+			result.StagedDeleted = append(result.StagedDeleted, headPath)
+		}
 	}
 
 	sort.Strings(result.Untracked)
 	sort.Strings(result.Modified)
 	sort.Strings(result.Deleted)
 	sort.Strings(result.StagedNew)
+	sort.Strings(result.StagedModified)
+	sort.Strings(result.StagedDeleted)
 
 	return result, nil
 }

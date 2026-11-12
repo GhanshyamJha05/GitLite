@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"gitlite/internal/object"
+	"gitlite/internal/util"
 )
 
 const (
@@ -103,38 +104,11 @@ func Load(indexPath string) (*Index, error) {
 
 // Save atomically writes the index to disk using a temporary file and atomic rename.
 func (idx *Index) Save(indexPath string) error {
-	parentDir := filepath.Dir(indexPath)
-	if err := os.MkdirAll(parentDir, 0755); err != nil {
-		return fmt.Errorf("creating index directory %s: %w", parentDir, err)
-	}
-
 	data, err := json.MarshalIndent(idx, "", "  ")
 	if err != nil {
 		return fmt.Errorf("serializing index: %w", err)
 	}
-
-	tmpFile, err := os.CreateTemp(parentDir, "tmp_index_*")
-	if err != nil {
-		return fmt.Errorf("creating temporary index file: %w", err)
-	}
-	tmpName := tmpFile.Name()
-	defer func() {
-		_ = os.Remove(tmpName)
-	}()
-
-	if _, err := tmpFile.Write(data); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("writing temporary index data: %w", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("closing temporary index file: %w", err)
-	}
-
-	if err := os.Rename(tmpName, indexPath); err != nil {
-		return fmt.Errorf("committing index file: %w", err)
-	}
-
-	return nil
+	return util.AtomicWriteFile(indexPath, data, 0644)
 }
 
 // WriteTree recursively converts the index's staged flat paths into a hierarchical tree object graph,

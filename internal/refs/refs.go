@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gitlite/internal/object"
+	"gitlite/internal/util"
 )
 
 var (
@@ -93,33 +94,7 @@ func (m *Manager) UpdateHead(newHash object.Hash) error {
 
 // AtomicWriteFile safely writes content to targetPath using a temporary file and atomic rename.
 func (m *Manager) AtomicWriteFile(targetPath string, content []byte) error {
-	parent := filepath.Dir(targetPath)
-	if err := os.MkdirAll(parent, 0755); err != nil {
-		return fmt.Errorf("creating parent directory %s: %w", parent, err)
-	}
-
-	tmpFile, err := os.CreateTemp(parent, "tmp_ref_*")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-	tmpName := tmpFile.Name()
-	defer func() {
-		_ = os.Remove(tmpName)
-	}()
-
-	if _, err := tmpFile.Write(content); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("writing content: %w", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("closing temp file: %w", err)
-	}
-
-	if err := os.Rename(tmpName, targetPath); err != nil {
-		return fmt.Errorf("committing file: %w", err)
-	}
-
-	return nil
+	return util.AtomicWriteFile(targetPath, content, 0644)
 }
 
 // atomicWriteRef safely writes a ref using AtomicWriteFile.

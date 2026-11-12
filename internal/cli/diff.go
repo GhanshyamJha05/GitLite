@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"gitlite/internal/object"
 	"gitlite/internal/repository"
 
 	"github.com/spf13/cobra"
@@ -22,15 +21,15 @@ var diffCmd = &cobra.Command{
 			return err
 		}
 
-		// Case 1: Two commits provided
+		// Case 1: Two revisions provided
 		if len(args) == 2 {
-			hashA := object.Hash(args[0])
-			hashB := object.Hash(args[1])
-			if err := hashA.Validate(); err != nil {
-				return fmt.Errorf("invalid commit A: %w", err)
+			hashA, err := repo.ResolveRevision(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid commit A (%s): %w", args[0], err)
 			}
-			if err := hashB.Validate(); err != nil {
-				return fmt.Errorf("invalid commit B: %w", err)
+			hashB, err := repo.ResolveRevision(args[1])
+			if err != nil {
+				return fmt.Errorf("invalid commit B (%s): %w", args[1], err)
 			}
 			out, err := repo.DiffCommits(hashA, hashB)
 			if err != nil {

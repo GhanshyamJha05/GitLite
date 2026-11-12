@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gitlite/internal/index"
 	"gitlite/internal/object"
@@ -117,13 +118,18 @@ func (r *Repository) Checkout(target string) error {
 		if _, existsInTarget := targetFiles[relPath]; !existsInTarget {
 			fullPath := filepath.Join(r.WorkTree, filepath.FromSlash(relPath))
 			_ = os.Remove(fullPath)
-			// Clean up parent directory if empty
+			// Clean up parent directory if empty, without traversing outside WorkTree
+			normWorkTree := filepath.Clean(r.WorkTree)
 			parent := filepath.Dir(fullPath)
-			for parent != r.WorkTree && parent != "." {
-				if err := os.Remove(parent); err != nil {
-					break // Directory not empty
+			for {
+				cleanParent := filepath.Clean(parent)
+				if cleanParent == normWorkTree || cleanParent == "." || !strings.HasPrefix(cleanParent, normWorkTree) {
+					break
 				}
-				parent = filepath.Dir(parent)
+				if err := os.Remove(cleanParent); err != nil {
+					break // Directory not empty or cannot remove
+				}
+				parent = filepath.Dir(cleanParent)
 			}
 		}
 	}

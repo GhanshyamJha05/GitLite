@@ -56,6 +56,15 @@ var branchCmd = &cobra.Command{
 			return err
 		}
 
+		if len(branches) == 0 {
+			// On an unborn branch with 0 commits yet
+			_, currentBranch, _ := refMgr.ResolveHead()
+			if currentBranch != "" {
+				cmd.Printf("* \033[32m%s\033[0m (initial commit)\n", currentBranch)
+			}
+			return nil
+		}
+
 		for _, b := range branches {
 			if b.IsCurrent {
 				cmd.Printf("* \033[32m%s\033[0m\n", b.Name)

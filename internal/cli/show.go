@@ -23,16 +23,17 @@ var showCmd = &cobra.Command{
 
 		var targetHash object.Hash
 		if len(args) == 0 {
-			headHash, _, err := repo.Refs().ResolveHead()
+			headHash, err := repo.ResolveRevision("HEAD")
 			if err != nil {
-				return fmt.Errorf("resolving HEAD: %w", err)
+				return err
 			}
 			targetHash = headHash
 		} else {
-			targetHash = object.Hash(args[0])
-			if err := targetHash.Validate(); err != nil {
-				return fmt.Errorf("invalid commit hash: %w", err)
+			h, err := repo.ResolveRevision(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid object %s: %w", args[0], err)
 			}
+			targetHash = h
 		}
 
 		commitObj, err := repo.Store.ReadCommit(targetHash)
@@ -50,6 +51,15 @@ var showCmd = &cobra.Command{
 
 		for _, line := range strings.Split(commitObj.Message, "\n") {
 			cmd.Printf("    %s\n", line)
+		}
+
+		// Display commit diff against its primary parent (if any)
+		if len(commitObj.Parents) > 0 {
+			cmd.Println()
+			diffOutput, err := repo.DiffCommits(commitObj.Parents[0], targetHash)
+			if err == nil && diffOutput != "" {
+				cmd.Print(diffOutput)
+			}
 		}
 
 		return nil

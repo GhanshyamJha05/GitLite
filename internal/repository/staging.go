@@ -45,14 +45,34 @@ func (r *Repository) Add(relOrAbsPath string) error {
 		return nil
 	}
 
-	info, err := os.Stat(targetAbs)
-	if err != nil {
-		return fmt.Errorf("stat target: %w", err)
-	}
+	normRel := filepath.ToSlash(relToWorkTree)
 
 	idx, err := r.LoadIndex()
 	if err != nil {
 		return fmt.Errorf("loading index: %w", err)
+	}
+
+	info, err := os.Stat(targetAbs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Check if file or directory was tracked in index; if so, unstage it (stage deletion)
+			deletedAny := false
+			if idx.Remove(normRel) {
+				deletedAny = true
+			}
+			// Also check if target was a directory prefix in index
+			prefix := normRel + "/"
+			for p := range idx.Entries {
+				if strings.HasPrefix(p, prefix) {
+					idx.Remove(p)
+					deletedAny = true
+				}
+			}
+			if deletedAny {
+				return r.SaveIndex(idx)
+			}
+		}
+		return fmt.Errorf("stat target: %w", err)
 	}
 
 	if info.IsDir() {

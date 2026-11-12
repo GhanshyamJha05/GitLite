@@ -23,11 +23,17 @@ var statusCmd = &cobra.Command{
 
 		clean := true
 
-		if len(res.StagedNew) > 0 {
+		if len(res.StagedNew) > 0 || len(res.StagedModified) > 0 || len(res.StagedDeleted) > 0 {
 			clean = false
 			cmd.Println("Changes to be committed:")
 			for _, file := range res.StagedNew {
 				cmd.Printf("  \tnew file:   %s\n", file)
+			}
+			for _, file := range res.StagedModified {
+				cmd.Printf("  \tmodified:   %s\n", file)
+			}
+			for _, file := range res.StagedDeleted {
+				cmd.Printf("  \tdeleted:    %s\n", file)
 			}
 			cmd.Println()
 		}

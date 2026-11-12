@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"strings"
 	"time"
 
 	"gitlite/internal/object"
@@ -19,6 +20,31 @@ var (
 // Refs returns the reference manager bound to this repository.
 func (r *Repository) Refs() *refs.Manager {
 	return refs.NewManager(r.GitLiteDir)
+}
+
+// ResolveRevision resolves a revision string (branch name, HEAD, or commit hash) to a commit Hash.
+func (r *Repository) ResolveRevision(rev string) (object.Hash, error) {
+	rev = strings.TrimSpace(rev)
+	if strings.EqualFold(rev, "HEAD") {
+		h, _, err := r.Refs().ResolveHead()
+		if err != nil {
+			return "", fmt.Errorf("resolving HEAD: %w", err)
+		}
+		return h, nil
+	}
+
+	// Try resolving as branch name
+	if h, err := r.Refs().ResolveBranch(rev); err == nil {
+		return h, nil
+	}
+
+	// Try resolving as commit Hash directly
+	h := object.Hash(rev)
+	if err := h.Validate(); err == nil && r.Store.Has(h) {
+		return h, nil
+	}
+
+	return "", fmt.Errorf("revision %q not found", rev)
 }
 
 // DefaultSignature returns an author/committer signature based on system or environment configuration.

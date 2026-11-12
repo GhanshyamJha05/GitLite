@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var (
@@ -97,14 +98,20 @@ func (s *Store) Write(obj Object) (Hash, error) {
 		return "", fmt.Errorf("closing temporary object file: %w", err)
 	}
 
-	// Atomic rename to final path
-	if err := os.Rename(tmpName, targetPath); err != nil {
-		// Handle potential Windows race where file was created concurrently
+	// Atomic rename to final path with retry for Windows file-system locking
+	var renameErr error
+	for attempts := 0; attempts < 5; attempts++ {
+		renameErr = os.Rename(tmpName, targetPath)
+		if renameErr == nil {
+			return h, nil
+		}
 		if s.Has(h) {
 			return h, nil
 		}
-		return "", fmt.Errorf("persisting object file: %w", err)
+		time.Sleep(10 * time.Millisecond)
 	}
+
+	return "", fmt.Errorf("persisting object file: %w", renameErr)
 
 	return h, nil
 }

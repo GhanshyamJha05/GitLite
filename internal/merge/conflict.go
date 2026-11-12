@@ -34,6 +34,14 @@ func ThreeWayMergeContent(base, current, incoming string) FileMergeResult {
 		return FileMergeResult{Content: current, Conflict: false}
 	}
 
+	// Binary check: If any side contains null bytes, line-by-line merge cannot be performed safely
+	if diff.IsBinary(base) || diff.IsBinary(current) || diff.IsBinary(incoming) {
+		return FileMergeResult{
+			Content:  current,
+			Conflict: true,
+		}
+	}
+
 	baseLines := diff.SplitLines(base)
 	curEdits := diff.ComputeLCS(base, current)
 	incEdits := diff.ComputeLCS(base, incoming)

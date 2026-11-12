@@ -106,8 +106,31 @@ type Hunk struct {
 	Edits  []Edit
 }
 
+// IsBinary checks whether a string contains null bytes, indicating binary content.
+func IsBinary(s string) bool {
+	// Sample first 8KB like Git does
+	limit := len(s)
+	if limit > 8000 {
+		limit = 8000
+	}
+	for i := 0; i < limit; i++ {
+		if s[i] == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // UnifiedDiff formats line edits into standard unified diff format with header and per-hunk line ranges.
 func UnifiedDiff(pathA, pathB string, aText, bText string) string {
+	if aText == bText {
+		return ""
+	}
+
+	if IsBinary(aText) || IsBinary(bText) {
+		return fmt.Sprintf("Binary files a/%s and b/%s differ\n", pathA, pathB)
+	}
+
 	edits := ComputeLCS(aText, bText)
 	if len(edits) == 0 {
 		return ""
