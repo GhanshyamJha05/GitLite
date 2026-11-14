@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"gitlite/internal/diff"
 	"gitlite/internal/object"
 	"gitlite/internal/refs"
 	"gitlite/internal/repository"
@@ -239,7 +240,7 @@ func (s *Server) GetCommitDetail(commitHash string) (*CommitDetailResponse, erro
 				Path:    path,
 				Status:  "deleted",
 				OldMode: string(pEntry.Mode),
-				Patch:   formatSimpleDiff(path, oldContent, nil),
+				Patch:   diff.UnifiedDiff(path, path, string(oldContent), ""),
 			})
 		} else if !inParent && inCurr {
 			// Added
@@ -248,7 +249,7 @@ func (s *Server) GetCommitDetail(commitHash string) (*CommitDetailResponse, erro
 				Path:    path,
 				Status:  "added",
 				NewMode: string(cEntry.Mode),
-				Patch:   formatSimpleDiff(path, nil, newContent),
+				Patch:   diff.UnifiedDiff(path, path, "", string(newContent)),
 			})
 		} else if inParent && inCurr && pEntry.Hash != cEntry.Hash {
 			// Modified
@@ -259,7 +260,7 @@ func (s *Server) GetCommitDetail(commitHash string) (*CommitDetailResponse, erro
 				Status:  "modified",
 				OldMode: string(pEntry.Mode),
 				NewMode: string(cEntry.Mode),
-				Patch:   formatSimpleDiff(path, oldContent, newContent),
+				Patch:   diff.UnifiedDiff(path, path, string(oldContent), string(newContent)),
 			})
 		}
 	}
