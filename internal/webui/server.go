@@ -308,47 +308,6 @@ func (s *Server) readTreeEntries(treeHash object.Hash) (map[string]object.TreeEn
 	return entries, err
 }
 
-func formatSimpleDiff(path string, oldData, newData []byte) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("--- a/%s\n+++ b/%s\n", path, path))
-
-	oldLines := splitLines(string(oldData))
-	newLines := splitLines(string(newData))
-
-	if oldData == nil {
-		for _, l := range newLines {
-			sb.WriteString("+" + l + "\n")
-		}
-		return sb.String()
-	}
-	if newData == nil {
-		for _, l := range oldLines {
-			sb.WriteString("-" + l + "\n")
-		}
-		return sb.String()
-	}
-
-	for _, l := range oldLines {
-		sb.WriteString("-" + l + "\n")
-	}
-	for _, l := range newLines {
-		sb.WriteString("+" + l + "\n")
-	}
-	return sb.String()
-}
-
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	lines := strings.Split(s, "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
-}
-
 // SetupHandler returns the HTTP multiplexer with all API endpoints and UI routes.
 func (s *Server) SetupHandler() http.Handler {
 	mux := http.NewServeMux()
