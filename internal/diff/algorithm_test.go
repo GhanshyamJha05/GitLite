@@ -70,4 +70,12 @@ func TestUnifiedDiff(t *testing.T) {
 	if !strings.Contains(multiHunkDiff, "-L1\n+L1 mod") || !strings.Contains(multiHunkDiff, "-L20\n+L20 mod") {
 		t.Errorf("expected hunk modifications for both L1 and L20:\n%s", multiHunkDiff)
 	}
+
+	// Trailing newline emission test
+	noNlA := "hello"
+	noNlB := "world"
+	noNlDiff := diff.UnifiedDiff("f.txt", "f.txt", noNlA, noNlB)
+	if !strings.Contains(noNlDiff, "\\ No newline at end of file") {
+		t.Errorf("expected '\\ No newline at end of file' in diff:\n%s", noNlDiff)
+	}
 }

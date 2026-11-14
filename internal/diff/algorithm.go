@@ -156,16 +156,31 @@ func UnifiedDiff(pathA, pathB string, aText, bText string) string {
 	sb.WriteString(fmt.Sprintf("--- a/%s\n", pathA))
 	sb.WriteString(fmt.Sprintf("+++ b/%s\n", pathB))
 
-	for _, h := range hunks {
+	hasNewlineA := strings.HasSuffix(aText, "\n") || strings.HasSuffix(aText, "\r")
+	hasNewlineB := strings.HasSuffix(bText, "\n") || strings.HasSuffix(bText, "\r")
+
+	for i, h := range hunks {
 		sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", h.AStart, h.ACount, h.BStart, h.BCount))
-		for _, edit := range h.Edits {
+		isLastHunk := (i == len(hunks)-1)
+		for editIdx, edit := range h.Edits {
 			switch edit.Type {
 			case OpEqual:
 				sb.WriteString(fmt.Sprintf(" %s\n", edit.Text))
+				if isLastHunk && editIdx == len(h.Edits)-1 {
+					if !hasNewlineA && !hasNewlineB {
+						sb.WriteString("\\ No newline at end of file\n")
+					}
+				}
 			case OpInsert:
 				sb.WriteString(fmt.Sprintf("+%s\n", edit.Text))
+				if isLastHunk && editIdx == len(h.Edits)-1 && !hasNewlineB {
+					sb.WriteString("\\ No newline at end of file\n")
+				}
 			case OpDelete:
 				sb.WriteString(fmt.Sprintf("-%s\n", edit.Text))
+				if isLastHunk && editIdx == len(h.Edits)-1 && !hasNewlineA {
+					sb.WriteString("\\ No newline at end of file\n")
+				}
 			}
 		}
 	}
