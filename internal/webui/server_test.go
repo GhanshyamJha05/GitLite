@@ -115,4 +115,22 @@ func TestWebUIHandlers(t *testing.T) {
 	if curBranch != "feature" {
 		t.Errorf("expected current branch to be feature, got %s", curBranch)
 	}
+
+	// 5. Test /api/remote/add
+	remBody := strings.NewReader(`{"name":"origin","url":"https://github.com/testowner/testrepo.git","token":"secret"}`)
+	req = httptest.NewRequest("POST", "/api/remote/add", remBody)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for remote add, got %d: %s", w.Code, w.Body.String())
+	}
+
+	rem, err := repo.GetRemote("origin")
+	if err != nil {
+		t.Fatalf("expected remote origin to exist: %v", err)
+	}
+	if rem.URL != "https://github.com/testowner/testrepo.git" {
+		t.Errorf("unexpected remote url: %s", rem.URL)
+	}
 }

@@ -153,8 +153,10 @@ flowchart TD
 | `switch` | `gitlite switch <branch>` | User-friendly shorthand dedicated to switching active branch references. |
 | `diff` | `gitlite diff [--staged] [commit-a] [commit-b]` | Emits unified diff (`--- a/ +++ b/ @@ -l,s +l,s @@`) comparing working tree to index, staged changes to HEAD, or two arbitrary commits. |
 | `merge` | `gitlite merge <branch>` | Performs lowest-common-ancestor 3-way merge, handling fast-forwards, non-conflicting edits, and conflict marker emission. |
+| `remote` | `gitlite remote add/remove/list` | Configures and manages remote tracking repositories (e.g. GitHub repos and tokens). |
+| `push` | `gitlite push [remote] [branch]` | Synchronizes local commits, directory trees, and blobs directly to GitHub repositories via the Git Data API. |
 | `undo` | `gitlite undo` | Time-traveling rollback command restoring HEAD, branch refs, index, and worktree using atomic operation journaling. |
-| `ui` | `gitlite ui [-p port] [--no-open]` | Embedded zero-dependency web visualizer serving interactive DAG commit graph, branch switcher, and diff viewer. |
+| `ui` | `gitlite ui [-p port] [--no-open]` | Embedded zero-dependency web visualizer serving interactive DAG commit graph, branch switcher, diff inspector, and one-click GitHub push. |
 | `fsck` | `gitlite fsck` | Audits the entire object database: checks zlib decompression, verifies cryptographic SHA-256 hashes, traces graph connectivity, and flags dangling objects. |
 
 ---

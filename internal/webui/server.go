@@ -14,6 +14,7 @@ import (
 	"gitlite/internal/diff"
 	"gitlite/internal/object"
 	"gitlite/internal/refs"
+	"gitlite/internal/remote"
 	"gitlite/internal/repository"
 )
 
@@ -50,11 +51,19 @@ type CommitNode struct {
 
 // GraphResponse is the JSON payload returned by /api/graph.
 type GraphResponse struct {
-	Commits       []CommitNode      `json:"commits"`
-	Branches      []refs.BranchInfo `json:"branches"`
-	CurrentBranch string            `json:"current_branch"`
-	HeadCommit    string            `json:"head_commit"`
-	WorkTree      string            `json:"work_tree"`
+	Commits       []CommitNode              `json:"commits"`
+	Branches      []refs.BranchInfo         `json:"branches"`
+	Remotes       map[string]RemoteResponse `json:"remotes"`
+	CurrentBranch string                    `json:"current_branch"`
+	HeadCommit    string                    `json:"head_commit"`
+	WorkTree      string                    `json:"work_tree"`
+}
+
+// RemoteResponse is the safe remote info sent to the frontend.
+type RemoteResponse struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	HasToken bool   `json:"has_token"`
 }
 
 // CommitDetailResponse represents commit metadata and changed file diffs.
@@ -153,9 +162,22 @@ func (s *Server) BuildGraph() (*GraphResponse, error) {
 		})
 	}
 
+	cfg, _ := s.Repo.LoadConfig()
+	remotesMap := make(map[string]RemoteResponse)
+	if cfg != nil {
+		for name, r := range cfg.Remotes {
+			remotesMap[name] = RemoteResponse{
+				Name:     r.Name,
+				URL:      r.URL,
+				HasToken: r.Token != "",
+			}
+		}
+	}
+
 	return &GraphResponse{
 		Commits:       commitNodes,
 		Branches:      branchList,
+		Remotes:       remotesMap,
 		CurrentBranch: currentBranch,
 		HeadCommit:    string(headCommit),
 		WorkTree:      s.Repo.WorkTree,
@@ -372,6 +394,61 @@ func (s *Server) SetupHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"success": true}`))
+	})
+
+	// API: Configure Remote
+	mux.HandleFunc("/api/remote/add", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name  string `json:"name"`
+			URL   string `json:"url"`
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid json payload"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Name == "" {
+			req.Name = "origin"
+		}
+		if err := s.Repo.AddRemote(req.Name, req.URL, req.Token); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	})
+
+	// API: Push to GitHub
+	mux.HandleFunc("/api/push", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Remote string `json:"remote"`
+			Branch string `json:"branch"`
+			Token  string `json:"token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+			http.Error(w, `{"error": "invalid json payload"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Remote == "" {
+			req.Remote = "origin"
+		}
+
+		res, err := remote.Push(s.Repo, req.Remote, req.Branch, req.Token)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
 	})
 
 	// Serve Frontend
