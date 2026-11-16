@@ -24,7 +24,7 @@ var commitCmd = &cobra.Command{
 			return err
 		}
 
-		sig := repository.DefaultSignature()
+		sig := repo.DefaultSignature()
 		commitHash, err := repo.Commit(commitMsg, sig, sig)
 		if err != nil {
 			return err

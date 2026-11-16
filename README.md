@@ -149,10 +149,14 @@ flowchart TD
 | `log` | `gitlite log` | Walks the commit DAG backward from HEAD, printing author, timestamp, commit hashes, and commit messages. |
 | `show` | `gitlite show [commit]` | Displays commit metadata, parent pointers, root tree hash, and commit message for a given hash or HEAD. |
 | `branch` | `gitlite branch [-d <name>] [name]` | Lists local branches with active branch indicator, creates a new branch pointer at HEAD, or deletes an existing branch. |
+| `tag` | `gitlite tag [-d <name>] [name] [commit]` | Creates, lists, or deletes lightweight tags pointing to specific commits or HEAD. |
 | `checkout` | `gitlite checkout <branch-or-commit>` | Safely switches branches or detaches HEAD, restoring working directory while guarding uncommitted changes from corruption. |
 | `switch` | `gitlite switch <branch>` | User-friendly shorthand dedicated to switching active branch references. |
+| `reset` | `gitlite reset [--soft\|--mixed\|--hard] [commit]` | Resets HEAD, index, and optionally working tree to the specified commit state. |
+| `stash` | `gitlite stash [push\|pop\|list]` | Saves dirty working tree and index changes away to a LIFO stack and restores clean HEAD state. |
 | `diff` | `gitlite diff [--staged] [commit-a] [commit-b]` | Emits unified diff (`--- a/ +++ b/ @@ -l,s +l,s @@`) comparing working tree to index, staged changes to HEAD, or two arbitrary commits. |
 | `merge` | `gitlite merge <branch>` | Performs lowest-common-ancestor 3-way merge, handling fast-forwards, non-conflicting edits, and conflict marker emission. |
+| `config` | `gitlite config [--list] [key] [value]` | Inspects and sets repository configuration variables (e.g. `user.name`, `user.email`). |
 | `remote` | `gitlite remote add/remove/list` | Configures and manages remote tracking repositories (e.g. GitHub repos and tokens). |
 | `push` | `gitlite push [remote] [branch]` | Synchronizes local commits, directory trees, and blobs directly to GitHub repositories via the Git Data API. |
 | `undo` | `gitlite undo` | Time-traveling rollback command restoring HEAD, branch refs, index, and worktree using atomic operation journaling. |

@@ -85,30 +85,81 @@ func (r *Repository) Undo() (*journal.StateSnapshot, error) {
 		_ = os.Remove(idxPath)
 	}
 
-	// 4. Restore working tree files according to restored index (or commit)
+	// 4. Restore working tree files and clean up deleted files
+	// Read current files tracked in the repository before restoration
+	currTrackedFiles := make(map[string]bool)
+	if curIdx, err := r.LoadIndex(); err == nil {
+		for p := range curIdx.Entries {
+			currTrackedFiles[p] = true
+		}
+	}
+
+	targetFiles := make(map[string]object.TreeEntry)
 	if lastSnap.HeadCommit != "" {
 		commitObj, err := r.Store.ReadCommit(lastSnap.HeadCommit)
-		if err == nil {
-			treeFiles, err := FlattenTree(r.Store, commitObj.TreeHash)
-			if err == nil {
-				// Clean files in working tree that are not in target tree
-				var restoredIdx index.Index
-				if len(lastSnap.IndexData) > 0 {
-					_ = json.Unmarshal(lastSnap.IndexData, &restoredIdx)
-				}
-				for path, entry := range treeFiles {
-					fullPath := filepath.Join(r.WorkTree, filepath.FromSlash(path))
-					_ = os.MkdirAll(filepath.Dir(fullPath), 0755)
-					blob, err := r.Store.ReadBlob(entry.Hash)
-					if err == nil {
-						perm := os.FileMode(0644)
-						if entry.Mode == object.ModeExecutable {
-							perm = 0755
-						}
-						_ = os.WriteFile(fullPath, blob.Data, perm)
+		if err != nil {
+			return nil, fmt.Errorf("reading restored commit %s: %w", lastSnap.HeadCommit, err)
+		}
+		tf, err := FlattenTree(r.Store, commitObj.TreeHash)
+		if err != nil {
+			return nil, fmt.Errorf("flattening restored tree: %w", err)
+		}
+		targetFiles = tf
+	}
+
+	// Also consider files in the restored index (for staged uncommitted changes)
+	if len(lastSnap.IndexData) > 0 {
+		var restoredIdx index.Index
+		if err := json.Unmarshal(lastSnap.IndexData, &restoredIdx); err == nil {
+			for p, ie := range restoredIdx.Entries {
+				if _, exists := targetFiles[p]; !exists {
+					targetFiles[p] = object.TreeEntry{
+						Name: filepath.Base(p),
+						Mode: ie.Mode,
+						Hash: ie.Hash,
 					}
 				}
 			}
+		}
+	}
+
+	// A. Remove files that were in the working tree/index before undo but NOT in the target restored state
+	for relPath := range currTrackedFiles {
+		if _, exists := targetFiles[relPath]; !exists {
+			fullPath := filepath.Join(r.WorkTree, filepath.FromSlash(relPath))
+			_ = os.Remove(fullPath)
+			// Clean empty parent directories
+			normWorkTree := filepath.Clean(r.WorkTree)
+			parent := filepath.Dir(fullPath)
+			for {
+				cleanParent := filepath.Clean(parent)
+				if cleanParent == normWorkTree || cleanParent == "." || !strings.HasPrefix(cleanParent, normWorkTree) {
+					break
+				}
+				if err := os.Remove(cleanParent); err != nil {
+					break
+				}
+				parent = filepath.Dir(cleanParent)
+			}
+		}
+	}
+
+	// B. Restore all target files from CAS blobs into the working tree
+	for relPath, entry := range targetFiles {
+		fullPath := filepath.Join(r.WorkTree, filepath.FromSlash(relPath))
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			return nil, fmt.Errorf("creating directory for %s: %w", relPath, err)
+		}
+		blob, err := r.Store.ReadBlob(entry.Hash)
+		if err != nil {
+			return nil, fmt.Errorf("reading blob %s for %s: %w", entry.Hash, relPath, err)
+		}
+		perm := os.FileMode(0644)
+		if entry.Mode == object.ModeExecutable {
+			perm = 0755
+		}
+		if err := os.WriteFile(fullPath, blob.Data, perm); err != nil {
+			return nil, fmt.Errorf("writing restored file %s: %w", relPath, err)
 		}
 	}
 

@@ -21,6 +21,7 @@ const (
 	ActionMerge    ActionType = "merge"
 	ActionAdd      ActionType = "add"
 	ActionBranch   ActionType = "branch"
+	ActionReset    ActionType = "reset"
 )
 
 // JournalFile is the name of the journal state log inside .gitlite.

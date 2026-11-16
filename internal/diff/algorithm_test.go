@@ -78,4 +78,28 @@ func TestUnifiedDiff(t *testing.T) {
 	if !strings.Contains(noNlDiff, "\\ No newline at end of file") {
 		t.Errorf("expected '\\ No newline at end of file' in diff:\n%s", noNlDiff)
 	}
+
+	// Windows UTF-16 text with BOM must NOT be marked as binary
+	utf16LE := string([]byte{0xFF, 0xFE, 'H', 0x00, 'e', 0x00, 'l', 0x00, 'l', 0x00, 'o', 0x00})
+	if diff.IsBinary(utf16LE) {
+		t.Errorf("expected UTF-16 LE with BOM to not be binary")
+	}
+
+	// Windows UTF-16 BE with BOM
+	utf16BE := string([]byte{0xFE, 0xFF, 0x00, 'H', 0x00, 'e', 0x00, 'l', 0x00, 'l', 0x00, 'o'})
+	if diff.IsBinary(utf16BE) {
+		t.Errorf("expected UTF-16 BE with BOM to not be binary")
+	}
+
+	// Windows UTF-16 without BOM (alternating nulls)
+	utf16NoBOM := string([]byte{'H', 0x00, 'e', 0x00, 'l', 0x00, 'l', 0x00, 'o', 0x00})
+	if diff.IsBinary(utf16NoBOM) {
+		t.Errorf("expected UTF-16 without BOM to not be binary")
+	}
+
+	// Truly binary data with random null bytes
+	binaryData := string([]byte{0x01, 0x02, 0x00, 0x03, 0xFF, 0x00, 0x0A, 0x0D})
+	if !diff.IsBinary(binaryData) {
+		t.Errorf("expected binary data to be flagged as binary")
+	}
 }

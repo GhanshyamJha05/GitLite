@@ -15,10 +15,18 @@ type RemoteConfig struct {
 	Token string `json:"token,omitempty"`
 }
 
+// UserConfig represents user identity configuration.
+type UserConfig struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
 // Config represents the GitLite repository configuration stored in .gitlite/config.
 type Config struct {
 	Version int                     `json:"version"`
+	User    UserConfig              `json:"user,omitempty"`
 	Remotes map[string]RemoteConfig `json:"remotes,omitempty"`
+	Values  map[string]string       `json:"values,omitempty"`
 }
 
 // LoadConfig reads and parses the .gitlite/config file.
@@ -41,6 +49,9 @@ func (r *Repository) LoadConfig() (*Config, error) {
 	}
 	if cfg.Remotes == nil {
 		cfg.Remotes = make(map[string]RemoteConfig)
+	}
+	if cfg.Values == nil {
+		cfg.Values = make(map[string]string)
 	}
 	return &cfg, nil
 }
@@ -107,4 +118,69 @@ func (r *Repository) GetRemote(name string) (*RemoteConfig, error) {
 		return nil, fmt.Errorf("remote %q not found", name)
 	}
 	return &rem, nil
+}
+
+// GetConfigValue retrieves a setting by dot-notation key (e.g. "user.name", "user.email", or custom key).
+func (r *Repository) GetConfigValue(key string) (string, error) {
+	cfg, err := r.LoadConfig()
+	if err != nil {
+		return "", err
+	}
+	key = strings.ToLower(strings.TrimSpace(key))
+	switch key {
+	case "user.name":
+		return cfg.User.Name, nil
+	case "user.email":
+		return cfg.User.Email, nil
+	default:
+		if val, exists := cfg.Values[key]; exists {
+			return val, nil
+		}
+		return "", fmt.Errorf("config key %q not set", key)
+	}
+}
+
+// SetConfigValue updates a setting by dot-notation key.
+func (r *Repository) SetConfigValue(key, value string) error {
+	cfg, err := r.LoadConfig()
+	if err != nil {
+		return err
+	}
+	key = strings.ToLower(strings.TrimSpace(key))
+	value = strings.TrimSpace(value)
+
+	switch key {
+	case "user.name":
+		cfg.User.Name = value
+	case "user.email":
+		cfg.User.Email = value
+	default:
+		if cfg.Values == nil {
+			cfg.Values = make(map[string]string)
+		}
+		cfg.Values[key] = value
+	}
+	return r.SaveConfig(cfg)
+}
+
+// ListConfig returns a map of all configured key-value pairs.
+func (r *Repository) ListConfig() (map[string]string, error) {
+	cfg, err := r.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[string]string)
+	if cfg.User.Name != "" {
+		res["user.name"] = cfg.User.Name
+	}
+	if cfg.User.Email != "" {
+		res["user.email"] = cfg.User.Email
+	}
+	for k, v := range cfg.Values {
+		res[k] = v
+	}
+	for name, rem := range cfg.Remotes {
+		res["remote."+name+".url"] = rem.URL
+	}
+	return res, nil
 }

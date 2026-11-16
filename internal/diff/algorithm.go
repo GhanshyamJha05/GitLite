@@ -106,19 +106,61 @@ type Hunk struct {
 	Edits  []Edit
 }
 
-// IsBinary checks whether a string contains null bytes, indicating binary content.
+// IsBinary checks whether a byte sequence represents binary data rather than text.
+// It handles UTF-16 BOMs (LE / BE) and UTF-8 BOM, and distinguishes encoded Unicode text from binary data.
 func IsBinary(s string) bool {
-	// Sample first 8KB like Git does
-	limit := len(s)
+	data := []byte(s)
+	limit := len(data)
+	if limit == 0 {
+		return false
+	}
+
+	// 1. Check for standard UTF-16 BOMs
+	// UTF-16 Little Endian: 0xFF, 0xFE
+	// UTF-16 Big Endian: 0xFE, 0xFF
+	if limit >= 2 {
+		if (data[0] == 0xFF && data[1] == 0xFE) || (data[0] == 0xFE && data[1] == 0xFF) {
+			return false
+		}
+	}
+
+	// 2. Check for UTF-8 BOM: 0xEF, 0xBB, 0xBF
+	if limit >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF {
+		return false
+	}
+
 	if limit > 8000 {
 		limit = 8000
 	}
+
+	// 3. Heuristic for UTF-16 without BOM (common on Windows PowerShell / registry exports / notepad):
+	// In UTF-16 text of ASCII chars, alternating bytes are null (0x00).
+	// If nulls appear in alternating even or odd positions with valid printable/whitespace ASCII on the other, it's UTF-16.
+	nullCount := 0
+	evenNulls := 0
+	oddNulls := 0
 	for i := 0; i < limit; i++ {
-		if s[i] == 0 {
-			return true
+		if data[i] == 0 {
+			nullCount++
+			if i%2 == 0 {
+				evenNulls++
+			} else {
+				oddNulls++
+			}
 		}
 	}
-	return false
+
+	if nullCount == 0 {
+		return false
+	}
+
+	// If roughly half the bytes are null and they are concentrated on even or odd offsets, treat as UTF-16 text
+	pairs := limit / 2
+	if pairs > 2 && (oddNulls >= pairs*4/5 || evenNulls >= pairs*4/5) {
+		return false
+	}
+
+	return true
 }
 
 // UnifiedDiff formats line edits into standard unified diff format with header and per-hunk line ranges.

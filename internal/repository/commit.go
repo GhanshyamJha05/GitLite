@@ -39,6 +39,11 @@ func (r *Repository) ResolveRevision(rev string) (object.Hash, error) {
 		return h, nil
 	}
 
+	// Try resolving as tag name
+	if h, err := r.Refs().ResolveTag(rev); err == nil {
+		return h, nil
+	}
+
 	// Try resolving as commit Hash directly
 	h := object.Hash(rev)
 	if err := h.Validate(); err == nil && r.Store.Has(h) {
@@ -49,6 +54,43 @@ func (r *Repository) ResolveRevision(rev string) (object.Hash, error) {
 }
 
 // DefaultSignature returns an author/committer signature based on system or environment configuration.
+func (r *Repository) DefaultSignature() object.Signature {
+	name := ""
+	email := ""
+
+	// Check repository config first
+	if cfg, err := r.LoadConfig(); err == nil {
+		name = cfg.User.Name
+		email = cfg.User.Email
+	}
+
+	if name == "" {
+		name = os.Getenv("GITLITE_AUTHOR_NAME")
+	}
+	if email == "" {
+		email = os.Getenv("GITLITE_AUTHOR_EMAIL")
+	}
+
+	if name == "" {
+		if u, err := user.Current(); err == nil && u.Username != "" {
+			name = u.Username
+		} else {
+			name = "GitLite User"
+		}
+	}
+
+	if email == "" {
+		email = "user@gitlite.local"
+	}
+
+	return object.Signature{
+		Name:  name,
+		Email: email,
+		When:  time.Now(),
+	}
+}
+
+// DefaultSignature returns an author/committer signature based on system or environment configuration (standalone fallback).
 func DefaultSignature() object.Signature {
 	name := os.Getenv("GITLITE_AUTHOR_NAME")
 	email := os.Getenv("GITLITE_AUTHOR_EMAIL")
