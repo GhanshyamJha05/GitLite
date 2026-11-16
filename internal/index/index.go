@@ -76,7 +76,30 @@ func (idx *Index) SortedEntries() []Entry {
 	return list
 }
 
+// Decode parses index bytes from either binary (v2) or legacy JSON format.
+func Decode(data []byte) (*Index, error) {
+	if len(data) == 0 {
+		return New(), nil
+	}
+
+	// 1. Try binary format if header magic matches "DIRC"
+	if len(data) >= 4 && string(data[:4]) == BinaryIndexMagic {
+		return DecodeBinary(data)
+	}
+
+	// 2. Fallback to legacy JSON format
+	idx := New()
+	if err := json.Unmarshal(data, idx); err != nil {
+		return nil, fmt.Errorf("decoding index: %w", err)
+	}
+	if idx.Entries == nil {
+		idx.Entries = make(map[string]Entry)
+	}
+	return idx, nil
+}
+
 // Load reads and deserializes the index from the given path (e.g. .gitlite/index).
+// Supports both binary checksummed index format (v2) and legacy JSON format.
 // If the index file does not exist, an empty Index is returned without error.
 func Load(indexPath string) (*Index, error) {
 	data, err := os.ReadFile(indexPath)
@@ -87,24 +110,12 @@ func Load(indexPath string) (*Index, error) {
 		return nil, fmt.Errorf("reading index file: %w", err)
 	}
 
-	idx := New()
-	if len(data) == 0 {
-		return idx, nil
-	}
-
-	if err := json.Unmarshal(data, idx); err != nil {
-		return nil, fmt.Errorf("decoding index file: %w", err)
-	}
-	if idx.Entries == nil {
-		idx.Entries = make(map[string]Entry)
-	}
-
-	return idx, nil
+	return Decode(data)
 }
 
-// Save atomically writes the index to disk using a temporary file and atomic rename.
+// Save atomically writes the index to disk using binary checksummed format with atomic rename.
 func (idx *Index) Save(indexPath string) error {
-	data, err := json.MarshalIndent(idx, "", "  ")
+	data, err := idx.EncodeBinary()
 	if err != nil {
 		return fmt.Errorf("serializing index: %w", err)
 	}

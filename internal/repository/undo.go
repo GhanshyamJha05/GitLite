@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,8 +108,7 @@ func (r *Repository) Undo() (*journal.StateSnapshot, error) {
 
 	// Also consider files in the restored index (for staged uncommitted changes)
 	if len(lastSnap.IndexData) > 0 {
-		var restoredIdx index.Index
-		if err := json.Unmarshal(lastSnap.IndexData, &restoredIdx); err == nil {
+		if restoredIdx, err := index.Decode(lastSnap.IndexData); err == nil {
 			for p, ie := range restoredIdx.Entries {
 				if _, exists := targetFiles[p]; !exists {
 					targetFiles[p] = object.TreeEntry{

@@ -1,6 +1,7 @@
 package index_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -83,6 +84,42 @@ func TestIndexSaveAndLoad(t *testing.T) {
 	}
 	if entry.Hash != h || entry.Size != 50 {
 		t.Errorf("loaded entry mismatch: %+v", entry)
+	}
+
+	// Verify binary format header "DIRC"
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("reading index file: %v", err)
+	}
+	if len(data) < 12+32 || string(data[:4]) != index.BinaryIndexMagic {
+		t.Fatalf("expected binary index magic %q, got: %q", index.BinaryIndexMagic, string(data[:4]))
+	}
+
+	// Verify checksum corruption detection: flip a byte in the payload
+	corrupted := make([]byte, len(data))
+	copy(corrupted, data)
+	corrupted[15] ^= 0xFF
+	corruptedPath := filepath.Join(tempDir, "index_corrupt")
+	if err := os.WriteFile(corruptedPath, corrupted, 0644); err != nil {
+		t.Fatalf("writing corrupt index: %v", err)
+	}
+	_, err = index.Load(corruptedPath)
+	if err == nil {
+		t.Fatalf("expected error loading corrupted index, got nil")
+	}
+
+	// Verify legacy JSON index loading fallback
+	jsonPath := filepath.Join(tempDir, "index_json")
+	jsonData := `{"entries":{"legacy.txt":{"path":"legacy.txt","hash":"1111111111111111111111111111111111111111111111111111111111111111","mode":"100644","size":42,"mod_time_nano":100}}}`
+	if err := os.WriteFile(jsonPath, []byte(jsonData), 0644); err != nil {
+		t.Fatalf("writing json index: %v", err)
+	}
+	legacyLoaded, err := index.Load(jsonPath)
+	if err != nil {
+		t.Fatalf("loading legacy json index failed: %v", err)
+	}
+	if legEntry, ok := legacyLoaded.Get("legacy.txt"); !ok || legEntry.Size != 42 {
+		t.Errorf("legacy entry mismatch: %+v", legEntry)
 	}
 }
 

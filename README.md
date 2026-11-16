@@ -164,6 +164,7 @@ flowchart TD
 | `push` | `gitlite push [-f\|--force] [-u\|--set-upstream] [remote] [branch]` | Synchronizes local commits, directory trees, and blobs directly to GitHub repositories via the Git Data API. Supports force push and upstream tracking. |
 | `undo` | `gitlite undo` | Time-traveling rollback command restoring HEAD, branch refs, index, and worktree using atomic operation journaling. |
 | `ui` | `gitlite ui [-p port] [--no-open]` | Embedded zero-dependency web visualizer serving interactive DAG commit graph, branch switcher, diff inspector, and one-click GitHub push. |
+| `lfs` | `gitlite lfs [track\|untrack\|ls-files\|pointer]` | Tracks large binary files using Git LFS pointer files, storing binary payloads separately in CAS. |
 | `fsck` | `gitlite fsck` | Audits the entire object database: checks zlib decompression, verifies cryptographic SHA-256 hashes, traces graph connectivity, and flags dangling objects. |
 
 ---
