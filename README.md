@@ -145,7 +145,7 @@ flowchart TD
 | `init` | `gitlite init [directory]` | Initializes a fresh GitLite repository with `.gitlite` layout and default branch reference (`main`). |
 | `add` | `gitlite add <path>...` | Stages files or directories recursively into the index, writing new blobs to CAS. Guarded against path traversal and `.gitlite` directory staging. |
 | `status` | `gitlite status` | Compares working directory against staged index and HEAD commit, identifying untracked, modified, and staged changes. |
-| `commit` | `gitlite commit -m "<message>"` | Builds hierarchical tree objects from staged index, synthesizes a commit pointing to HEAD parent, updates branch ref, and clears stage. |
+| `commit` | `gitlite commit [-m <msg>] [-a] [--amend]` | Builds hierarchical tree objects from staged index, synthesizes a commit pointing to HEAD parent, updates branch ref, and clears stage. Supports `-a` for auto-staging and `--amend` for modifying the tip commit. |
 | `log` | `gitlite log` | Walks the commit DAG backward from HEAD, printing author, timestamp, commit hashes, and commit messages. |
 | `show` | `gitlite show [commit]` | Displays commit metadata, parent pointers, root tree hash, and commit message for a given hash or HEAD. |
 | `branch` | `gitlite branch [-d <name>] [name]` | Lists local branches with active branch indicator, creates a new branch pointer at HEAD, or deletes an existing branch. |
@@ -158,7 +158,10 @@ flowchart TD
 | `merge` | `gitlite merge <branch>` | Performs lowest-common-ancestor 3-way merge, handling fast-forwards, non-conflicting edits, and conflict marker emission. |
 | `config` | `gitlite config [--list] [key] [value]` | Inspects and sets repository configuration variables (e.g. `user.name`, `user.email`). |
 | `remote` | `gitlite remote add/remove/list` | Configures and manages remote tracking repositories (e.g. GitHub repos and tokens). |
-| `push` | `gitlite push [remote] [branch]` | Synchronizes local commits, directory trees, and blobs directly to GitHub repositories via the Git Data API. |
+| `fetch` | `gitlite fetch [remote]` | Downloads objects and remote tracking references without modifying the active branch. |
+| `pull` | `gitlite pull [remote] [branch]` | Fetches from the specified remote and integrates changes into the current branch via fast-forward or 3-way merge. |
+| `clone` | `gitlite clone <repo-url> [directory]` | Clones remote repository, sets origin remote, downloads history, and checks out default branch. |
+| `push` | `gitlite push [-f\|--force] [-u\|--set-upstream] [remote] [branch]` | Synchronizes local commits, directory trees, and blobs directly to GitHub repositories via the Git Data API. Supports force push and upstream tracking. |
 | `undo` | `gitlite undo` | Time-traveling rollback command restoring HEAD, branch refs, index, and worktree using atomic operation journaling. |
 | `ui` | `gitlite ui [-p port] [--no-open]` | Embedded zero-dependency web visualizer serving interactive DAG commit graph, branch switcher, diff inspector, and one-click GitHub push. |
 | `fsck` | `gitlite fsck` | Audits the entire object database: checks zlib decompression, verifies cryptographic SHA-256 hashes, traces graph connectivity, and flags dangling objects. |

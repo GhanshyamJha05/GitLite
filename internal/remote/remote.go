@@ -120,11 +120,29 @@ type PushResult struct {
 	RepoURL       string `json:"repo_url"`
 }
 
+// PushOptions specifies parameters for a push operation.
+type PushOptions struct {
+	RemoteName  string
+	BranchName  string
+	Token       string
+	Force       bool
+	SetUpstream bool
+}
+
 // Push sends local commits, trees, and blobs to the remote GitHub repository.
 func Push(repo *repository.Repository, remoteName, branchName, tokenOverride string) (*PushResult, error) {
-	rem, err := repo.GetRemote(remoteName)
+	return PushWithOptions(repo, PushOptions{
+		RemoteName: remoteName,
+		BranchName: branchName,
+		Token:      tokenOverride,
+	})
+}
+
+// PushWithOptions sends local commits, trees, and blobs with full option support (--force, --set-upstream).
+func PushWithOptions(repo *repository.Repository, opts PushOptions) (*PushResult, error) {
+	rem, err := repo.GetRemote(opts.RemoteName)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrRemoteNotConfigured, remoteName)
+		return nil, fmt.Errorf("%w: %s", ErrRemoteNotConfigured, opts.RemoteName)
 	}
 
 	owner, repoName, err := ParseGitHubURL(rem.URL)
@@ -132,7 +150,7 @@ func Push(repo *repository.Repository, remoteName, branchName, tokenOverride str
 		return nil, err
 	}
 
-	token := tokenOverride
+	token := opts.Token
 	if token == "" {
 		token = rem.Token
 	}
@@ -148,11 +166,27 @@ func Push(repo *repository.Repository, remoteName, branchName, tokenOverride str
 
 	client := NewGitHubClient(owner, repoName, token)
 	client.BaseURL = DefaultBaseURL
-	return PushWithClient(repo, client, branchName)
+	res, err := PushWithClientOptions(repo, client, opts.BranchName, opts.Force)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle --set-upstream: store branch tracking config in .gitlite/config
+	if opts.SetUpstream {
+		_ = repo.SetConfigValue(fmt.Sprintf("branch.%s.remote", res.Branch), opts.RemoteName)
+		_ = repo.SetConfigValue(fmt.Sprintf("branch.%s.merge", res.Branch), fmt.Sprintf("refs/heads/%s", res.Branch))
+	}
+
+	return res, nil
 }
 
 // PushWithClient pushes commits using the provided GitHub client.
 func PushWithClient(repo *repository.Repository, client *GitHubClient, branchName string) (*PushResult, error) {
+	return PushWithClientOptions(repo, client, branchName, false)
+}
+
+// PushWithClientOptions pushes commits using the provided GitHub client with optional force.
+func PushWithClientOptions(repo *repository.Repository, client *GitHubClient, branchName string, force bool) (*PushResult, error) {
 	refMgr := repo.Refs()
 	if branchName == "" {
 		_, curr, err := refMgr.ResolveHead()
@@ -355,7 +389,7 @@ func PushWithClient(repo *repository.Repository, client *GitHubClient, branchNam
 	refEndpoint := fmt.Sprintf("/git/refs/heads/%s", branchName)
 	updatePayload := map[string]interface{}{
 		"sha":   string(headCommitHash),
-		"force": false,
+		"force": force,
 	}
 
 	resp, err := client.doRequest(http.MethodPatch, refEndpoint, updatePayload)

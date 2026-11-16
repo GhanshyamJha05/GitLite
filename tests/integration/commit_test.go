@@ -84,3 +84,64 @@ func TestCommitAndLogWorkflow(t *testing.T) {
 		t.Errorf("unexpected show output:\n%s", showOut)
 	}
 }
+
+func TestCommitAmendAndAllFlags(t *testing.T) {
+	tempDir := t.TempDir()
+
+	_, err := executeCommand("init", tempDir)
+	if err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+
+	oldWd, _ := os.Getwd()
+	defer os.Chdir(oldWd)
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+
+	filePath := filepath.Join(tempDir, "auto.txt")
+	if err := os.WriteFile(filePath, []byte("v1"), 0644); err != nil {
+		t.Fatalf("writing auto.txt: %v", err)
+	}
+	if _, err := executeCommand("add", "auto.txt"); err != nil {
+		t.Fatalf("add failed: %v", err)
+	}
+	if _, err := executeCommand("commit", "-m", "first commit"); err != nil {
+		t.Fatalf("commit failed: %v", err)
+	}
+
+	// Modify auto.txt without running 'gitlite add'
+	if err := os.WriteFile(filePath, []byte("v2 modified automatically"), 0644); err != nil {
+		t.Fatalf("modifying auto.txt: %v", err)
+	}
+
+	// Commit with -a
+	commitOut, err := executeCommand("commit", "-a", "-m", "commit with -a flag")
+	if err != nil {
+		t.Fatalf("commit -a failed: %v, out: %s", err, commitOut)
+	}
+	if !strings.Contains(commitOut, "commit with -a flag") {
+		t.Errorf("expected commit output to contain message, got: %s", commitOut)
+	}
+
+	// Commit with --amend
+	amendOut, err := executeCommand("commit", "--amend", "-m", "commit amended message")
+	if err != nil {
+		t.Fatalf("commit --amend failed: %v, out: %s", err, amendOut)
+	}
+	if !strings.Contains(amendOut, "commit amended message") {
+		t.Errorf("expected amend output to contain amended message, got: %s", amendOut)
+	}
+
+	// Check log
+	logOut, err := executeCommand("log")
+	if err != nil {
+		t.Fatalf("log failed: %v", err)
+	}
+	if !strings.Contains(logOut, "commit amended message") {
+		t.Errorf("expected log to contain amended message, got: %s", logOut)
+	}
+	if strings.Contains(logOut, "commit with -a flag") {
+		t.Errorf("amended message should replace original message in history")
+	}
+}

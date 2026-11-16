@@ -117,6 +117,16 @@ func DefaultSignature() object.Signature {
 // Commit creates an immutable snapshot of the current staged index, links parent commit(s),
 // writes the Commit object to CAS, and advances HEAD/branch atomically.
 func (r *Repository) Commit(message string, author, committer object.Signature) (object.Hash, error) {
+	return r.commitInternal(message, author, committer, false)
+}
+
+// CommitAmend replaces the current HEAD commit with a new commit containing current staged index
+// and links the parent(s) of the commit being amended.
+func (r *Repository) CommitAmend(message string, author, committer object.Signature) (object.Hash, error) {
+	return r.commitInternal(message, author, committer, true)
+}
+
+func (r *Repository) commitInternal(message string, author, committer object.Signature, amend bool) (object.Hash, error) {
 	if message == "" {
 		return "", errors.New("commit message cannot be empty")
 	}
@@ -131,7 +141,12 @@ func (r *Repository) Commit(message string, author, committer object.Signature) 
 	}
 
 	// Snapshot state before commit for time-traveling undo
-	snap, snapErr := r.SnapshotState(journal.ActionCommit, fmt.Sprintf("commit %q", message))
+	snapAction := journal.ActionCommit
+	snapDesc := fmt.Sprintf("commit %q", message)
+	if amend {
+		snapDesc = fmt.Sprintf("commit --amend %q", message)
+	}
+	snap, snapErr := r.SnapshotState(snapAction, snapDesc)
 
 	// 1. Build and write root tree object
 	rootTreeHash, err := idx.WriteTree(r.Store)
@@ -139,12 +154,27 @@ func (r *Repository) Commit(message string, author, committer object.Signature) 
 		return "", fmt.Errorf("writing tree from index: %w", err)
 	}
 
-	// 2. Discover parent commit from HEAD
+	// 2. Discover parent commit(s) from HEAD
 	refMgr := r.Refs()
 	headCommit, _, err := refMgr.ResolveHead()
+
 	var parents []object.Hash
-	if err == nil && headCommit != "" {
-		// Existing history
+	if amend {
+		if err != nil || headCommit == "" {
+			return "", errors.New("cannot amend: no existing commit at HEAD")
+		}
+		currCommitObj, err := r.Store.ReadCommit(headCommit)
+		if err != nil {
+			return "", fmt.Errorf("reading current HEAD commit to amend: %w", err)
+		}
+		// Amend adopts the parents of the commit being replaced
+		parents = currCommitObj.Parents
+		// Keep original author if not explicitly changed
+		if author.Name == "" {
+			author = currCommitObj.Author
+		}
+	} else if err == nil && headCommit != "" {
+		// Normal commit: parent is current HEAD
 		parents = append(parents, headCommit)
 	}
 

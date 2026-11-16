@@ -26,6 +26,8 @@ var pushCmd = &cobra.Command{
 		}
 
 		token, _ := cmd.Flags().GetString("token")
+		force, _ := cmd.Flags().GetBool("force")
+		setUpstream, _ := cmd.Flags().GetBool("set-upstream")
 
 		repo, err := repository.Discover("")
 		if err != nil {
@@ -33,13 +35,22 @@ var pushCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Pushing to %s...\n", remoteName)
-		res, err := remote.Push(repo, remoteName, branchName, token)
+		res, err := remote.PushWithOptions(repo, remote.PushOptions{
+			RemoteName:  remoteName,
+			BranchName:  branchName,
+			Token:       token,
+			Force:       force,
+			SetUpstream: setUpstream,
+		})
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("To %s\n", res.RepoURL)
 		fmt.Printf(" * [%s] %s -> %s\n", res.HeadCommit[:min(8, len(res.HeadCommit))], res.Branch, res.RemoteRef)
+		if setUpstream {
+			fmt.Printf("Branch '%s' set up to track remote branch '%s' from '%s'.\n", res.Branch, res.Branch, remoteName)
+		}
 		fmt.Printf("Synced %d commit(s), %d tree(s), %d blob(s).\n", res.PushedCommits, res.PushedTrees, res.PushedBlobs)
 		return nil
 	},
@@ -54,5 +65,7 @@ func min(a, b int) int {
 
 func init() {
 	pushCmd.Flags().StringP("token", "t", "", "GitHub Personal Access Token (or uses GITHUB_TOKEN env var)")
+	pushCmd.Flags().BoolP("force", "f", false, "force update remote references")
+	pushCmd.Flags().BoolP("set-upstream", "u", false, "set upstream for git pull/status tracking")
 	rootCmd.AddCommand(pushCmd)
 }
