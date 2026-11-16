@@ -76,6 +76,15 @@ func TestAddAndStatus(t *testing.T) {
 		t.Errorf("expected pkg/file_b.txt to be untracked, got: %s", out)
 	}
 
+	// Test status --short (-s)
+	shortOut, err := executeCommand("status", "-s")
+	if err != nil {
+		t.Fatalf("status -s failed: %v", err)
+	}
+	if !strings.Contains(shortOut, "A  file_a.txt") || !strings.Contains(shortOut, "?? pkg/file_b.txt") {
+		t.Errorf("unexpected short status output: %q", shortOut)
+	}
+
 	// Stage all with add .
 	_, err = executeCommand("add", ".")
 	if err != nil {

@@ -29,9 +29,15 @@ func (r *Repository) SaveIndex(idx *index.Index) error {
 // Add stages the file or directory at relOrAbsPath.
 // If the path is a directory, it recursively traverses and stages all non-ignored files.
 func (r *Repository) Add(relOrAbsPath string) error {
-	targetAbs, err := filepath.Abs(relOrAbsPath)
-	if err != nil {
-		return fmt.Errorf("resolving target path: %w", err)
+	var targetAbs string
+	var err error
+	if !filepath.IsAbs(relOrAbsPath) {
+		targetAbs = filepath.Join(r.WorkTree, relOrAbsPath)
+	} else {
+		targetAbs, err = filepath.Abs(relOrAbsPath)
+		if err != nil {
+			return fmt.Errorf("resolving target path: %w", err)
+		}
 	}
 
 	// Security: Prevent path traversal outside the repository work tree

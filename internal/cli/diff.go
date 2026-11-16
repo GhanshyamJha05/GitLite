@@ -2,13 +2,38 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"gitlite/internal/repository"
 
 	"github.com/spf13/cobra"
 )
 
-var diffStaged bool
+var (
+	diffStaged bool
+	diffColor  bool
+)
+
+func colorizeDiff(diffText string) string {
+	lines := strings.Split(diffText, "\n")
+	var colored []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") {
+			colored = append(colored, "\033[1m"+line+"\033[0m")
+		} else if strings.HasPrefix(line, "+") {
+			colored = append(colored, "\033[32m"+line+"\033[0m")
+		} else if strings.HasPrefix(line, "-") {
+			colored = append(colored, "\033[31m"+line+"\033[0m")
+		} else if strings.HasPrefix(line, "@@") {
+			colored = append(colored, "\033[36m"+line+"\033[0m")
+		} else if strings.HasPrefix(line, "diff ") || strings.HasPrefix(line, "index ") {
+			colored = append(colored, "\033[1m"+line+"\033[0m")
+		} else {
+			colored = append(colored, line)
+		}
+	}
+	return strings.Join(colored, "\n")
+}
 
 var diffCmd = &cobra.Command{
 	Use:   "diff [commit-a] [commit-b]",
@@ -16,9 +41,24 @@ var diffCmd = &cobra.Command{
 	Long:  `Show changes between the working tree and the index, changes between the index and HEAD (--staged), or differences between two commits.`,
 	Args:  cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		defer func() {
+			diffStaged = false
+			diffColor = false
+			_ = cmd.Flags().Set("staged", "false")
+			_ = cmd.Flags().Set("cached", "false")
+			_ = cmd.Flags().Set("color", "false")
+		}()
+
 		repo, err := repository.Discover("")
 		if err != nil {
 			return err
+		}
+
+		printOut := func(out string) {
+			if diffColor {
+				out = colorizeDiff(out)
+			}
+			cmd.Print(out)
 		}
 
 		// Case 1: Two revisions provided
@@ -35,7 +75,7 @@ var diffCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			cmd.Print(out)
+			printOut(out)
 			return nil
 		}
 
@@ -47,7 +87,7 @@ var diffCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			cmd.Print(out)
+			printOut(out)
 			return nil
 		}
 
@@ -56,16 +96,14 @@ var diffCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		cmd.Print(out)
+		printOut(out)
 		return nil
-	},
-	PostRun: func(cmd *cobra.Command, args []string) {
-		diffStaged = false
 	},
 }
 
 func init() {
 	diffCmd.Flags().BoolVar(&diffStaged, "staged", false, "View staged changes (index vs HEAD)")
 	diffCmd.Flags().BoolVar(&diffStaged, "cached", false, "Synonym for --staged")
+	diffCmd.Flags().BoolVar(&diffColor, "color", false, "Show colored diff with ANSI escape codes")
 	rootCmd.AddCommand(diffCmd)
 }

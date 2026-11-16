@@ -120,6 +120,9 @@ type PushResult struct {
 	RepoURL       string `json:"repo_url"`
 }
 
+// PushProgressFunc is a callback for tracking push progress.
+type PushProgressFunc func(phase string, current, total int)
+
 // PushOptions specifies parameters for a push operation.
 type PushOptions struct {
 	RemoteName  string
@@ -127,6 +130,7 @@ type PushOptions struct {
 	Token       string
 	Force       bool
 	SetUpstream bool
+	OnProgress  PushProgressFunc
 }
 
 // Push sends local commits, trees, and blobs to the remote GitHub repository.
@@ -166,7 +170,7 @@ func PushWithOptions(repo *repository.Repository, opts PushOptions) (*PushResult
 
 	client := NewGitHubClient(owner, repoName, token)
 	client.BaseURL = DefaultBaseURL
-	res, err := PushWithClientOptions(repo, client, opts.BranchName, opts.Force)
+	res, err := PushWithClientAdvanced(repo, client, opts.BranchName, opts.Force, opts.OnProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +191,11 @@ func PushWithClient(repo *repository.Repository, client *GitHubClient, branchNam
 
 // PushWithClientOptions pushes commits using the provided GitHub client with optional force.
 func PushWithClientOptions(repo *repository.Repository, client *GitHubClient, branchName string, force bool) (*PushResult, error) {
+	return PushWithClientAdvanced(repo, client, branchName, force, nil)
+}
+
+// PushWithClientAdvanced pushes commits using the provided GitHub client with optional force and progress reporting.
+func PushWithClientAdvanced(repo *repository.Repository, client *GitHubClient, branchName string, force bool, onProgress PushProgressFunc) (*PushResult, error) {
 	refMgr := repo.Refs()
 	if branchName == "" {
 		_, curr, err := refMgr.ResolveHead()

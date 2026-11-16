@@ -9,11 +9,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var logOneline bool
+
 var logCmd = &cobra.Command{
 	Use:   "log",
 	Short: "Show commit logs",
 	Long:  `List commit history reachable from the current HEAD in reverse chronological order.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		defer func() {
+			logOneline = false
+			_ = cmd.Flags().Set("oneline", "false")
+		}()
+
 		repo, err := repository.Discover("")
 		if err != nil {
 			return err
@@ -31,6 +38,21 @@ var logCmd = &cobra.Command{
 		commits, err := repo.Log(headHash)
 		if err != nil {
 			return err
+		}
+
+		if logOneline {
+			for _, c := range commits {
+				shortHash := string(c.Hash)
+				if len(shortHash) > 7 {
+					shortHash = shortHash[:7]
+				}
+				firstLine := c.Commit.Message
+				if idx := strings.IndexByte(firstLine, '\n'); idx != -1 {
+					firstLine = firstLine[:idx]
+				}
+				cmd.Printf("%s %s\n", shortHash, firstLine)
+			}
+			return nil
 		}
 
 		for i, c := range commits {
@@ -61,5 +83,6 @@ var logCmd = &cobra.Command{
 }
 
 func init() {
+	logCmd.Flags().BoolVar(&logOneline, "oneline", false, "Display each commit as a single line with short hash and subject")
 	rootCmd.AddCommand(logCmd)
 }

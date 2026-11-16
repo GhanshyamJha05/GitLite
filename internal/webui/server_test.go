@@ -133,4 +133,78 @@ func TestWebUIHandlers(t *testing.T) {
 	if rem.URL != "https://github.com/testowner/testrepo.git" {
 		t.Errorf("unexpected remote url: %s", rem.URL)
 	}
+
+	// 6. Test /api/stage
+	file2 := filepath.Join(tempDir, "file2.txt")
+	_ = os.WriteFile(file2, []byte("Content of file 2"), 0644)
+	stageBody := strings.NewReader(`{"path":"file2.txt"}`)
+	req = httptest.NewRequest("POST", "/api/stage", stageBody)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for stage, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 7. Test /api/commit (POST)
+	commitBody := strings.NewReader(`{"message":"feat: second commit from webui"}`)
+	req = httptest.NewRequest("POST", "/api/commit", commitBody)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for commit POST, got %d: %s", w.Code, w.Body.String())
+	}
+	var commitResp struct {
+		Success bool   `json:"success"`
+		Hash    string `json:"hash"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &commitResp)
+	if !commitResp.Success || commitResp.Hash == "" {
+		t.Errorf("expected commit success with hash, got %+v", commitResp)
+	}
+
+	// 8. Test /api/branch (GET and POST)
+	req = httptest.NewRequest("GET", "/api/branch", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for branch GET, got %d", w.Code)
+	}
+
+	branchBody := strings.NewReader(`{"name":"new-web-branch"}`)
+	req = httptest.NewRequest("POST", "/api/branch", branchBody)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for branch POST, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 9. Test /api/diff
+	req = httptest.NewRequest("GET", "/api/diff?from="+string(c1)+"&to="+commitResp.Hash, nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for diff GET, got %d: %s", w.Code, w.Body.String())
+	}
+	var diffResp struct {
+		Status string `json:"status"`
+		Diff   string `json:"diff"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &diffResp)
+	if diffResp.Status != "ok" || !strings.Contains(diffResp.Diff, "file2.txt") {
+		t.Errorf("expected diff to contain file2.txt, got %+v", diffResp)
+	}
+
+	// 10. Test CSRF blocking external origins
+	csrfBody := strings.NewReader(`{"name":"malicious-branch"}`)
+	req = httptest.NewRequest("POST", "/api/branch", csrfBody)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://attacker-site.com")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for cross-site POST, got %d", w.Code)
+	}
 }

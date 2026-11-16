@@ -26,8 +26,16 @@ type Report struct {
 	Issues          []Issue
 }
 
+// FsckProgressFunc is a callback reporting audit progress.
+type FsckProgressFunc func(phase string, current, total int)
+
 // Fsck audits the entire repository: objects, references, connectivity, and dangling objects.
 func Fsck(repo *repository.Repository) (*Report, error) {
+	return FsckWithProgress(repo, nil)
+}
+
+// FsckWithProgress audits the repository with a progress reporting callback.
+func FsckWithProgress(repo *repository.Repository, onProgress FsckProgressFunc) (*Report, error) {
 	report := &Report{}
 
 	objectsDir := filepath.Join(repo.GitLiteDir, "objects")
@@ -83,6 +91,9 @@ func Fsck(repo *repository.Repository) (*Report, error) {
 
 		report.ValidObjects++
 		allObjects[h] = objType
+		if onProgress != nil {
+			onProgress("Checking object directories", report.ValidObjects, report.TotalObjects)
+		}
 		return nil
 	})
 	if err != nil {

@@ -4,9 +4,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -330,76 +331,250 @@ func (s *Server) readTreeEntries(treeHash object.Hash) (map[string]object.TreeEn
 	return entries, err
 }
 
-// SetupHandler returns the HTTP multiplexer with all API endpoints and UI routes.
+func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+func writeJSONError(w http.ResponseWriter, msg string, code int) {
+	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+// SetupHandler configures HTTP routes, API endpoints, and security middleware.
 func (s *Server) SetupHandler() http.Handler {
 	mux := http.NewServeMux()
 
-	// API: Graph data
+	// API: Visualizer Graph
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		graph, err := s.BuildGraph()
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(graph)
+		writeJSON(w, http.StatusOK, graph)
 	})
 
-	// API: Commit details and diff
+	// API: Commit details (GET) or New Commit (POST)
 	mux.HandleFunc("/api/commit", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			var req struct {
+				Message string `json:"message"`
+				Amend   bool   `json:"amend"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSONError(w, "invalid json payload", http.StatusBadRequest)
+				return
+			}
+			if strings.TrimSpace(req.Message) == "" {
+				writeJSONError(w, "commit message cannot be empty", http.StatusBadRequest)
+				return
+			}
+
+			sig := repository.DefaultSignature()
+			if cfg, err := s.Repo.LoadConfig(); err == nil && cfg != nil {
+				if cfg.User.Name != "" {
+					sig.Name = cfg.User.Name
+				}
+				if cfg.User.Email != "" {
+					sig.Email = cfg.User.Email
+				}
+			}
+
+			var commitHash object.Hash
+			var err error
+			if req.Amend {
+				commitHash, err = s.Repo.CommitAmend(req.Message, sig, sig)
+			} else {
+				commitHash, err = s.Repo.Commit(req.Message, sig, sig)
+			}
+			if err != nil {
+				writeJSONError(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"success": true,
+				"hash":    string(commitHash),
+			})
+			return
+		}
+
+		// GET: Commit details and diff
 		hash := r.URL.Query().Get("hash")
 		if hash == "" {
-			http.Error(w, `{"error": "missing hash parameter"}`, http.StatusBadRequest)
+			writeJSONError(w, "missing hash parameter", http.StatusBadRequest)
 			return
 		}
 		detail, err := s.GetCommitDetail(hash)
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(detail)
+		writeJSON(w, http.StatusOK, detail)
 	})
 
 	// API: Status
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		status, err := s.Repo.Status()
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(status)
+		writeJSON(w, http.StatusOK, status)
+	})
+
+	// API: Stage files (POST)
+	mux.HandleFunc("/api/stage", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Path string `json:"path"`
+			All  bool   `json:"all"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+			writeJSONError(w, "invalid json payload", http.StatusBadRequest)
+			return
+		}
+
+		targetPath := req.Path
+		if req.All || targetPath == "" || targetPath == "." {
+			targetPath = "."
+		}
+
+		if err := s.Repo.Add(targetPath); err != nil {
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 	})
 
 	// API: Checkout branch
 	mux.HandleFunc("/api/checkout", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		var req struct {
 			Target string `json:"target"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error": "invalid json payload"}`, http.StatusBadRequest)
+			writeJSONError(w, "invalid json payload", http.StatusBadRequest)
 			return
 		}
 
 		if err := s.Repo.Checkout(req.Target); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"success": true}`))
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	})
+
+	// API: Branch list and management
+	mux.HandleFunc("/api/branch", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			branches, err := s.Repo.Refs().ListBranches()
+			if err != nil {
+				writeJSONError(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writeJSON(w, http.StatusOK, branches)
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var req struct {
+				Name       string `json:"name"`
+				Delete     bool   `json:"delete"`
+				StartPoint string `json:"start_point"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSONError(w, "invalid json payload", http.StatusBadRequest)
+				return
+			}
+			if req.Name == "" {
+				writeJSONError(w, "branch name is required", http.StatusBadRequest)
+				return
+			}
+
+			if req.Delete {
+				if err := s.Repo.Refs().DeleteBranch(req.Name); err != nil {
+					writeJSONError(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+				return
+			}
+
+			// Create branch
+			startPoint := req.StartPoint
+			if startPoint == "" {
+				startPoint = "HEAD"
+			}
+			targetHash, err := s.Repo.ResolveRevision(startPoint)
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("invalid start point: %v", err), http.StatusBadRequest)
+				return
+			}
+
+			if err := s.Repo.Refs().CreateBranch(req.Name, targetHash); err != nil {
+				writeJSONError(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+			return
+		}
+
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// API: Arbitrary Diff (GET)
+	mux.HandleFunc("/api/diff", func(w http.ResponseWriter, r *http.Request) {
+		from := r.URL.Query().Get("from")
+		to := r.URL.Query().Get("to")
+		staged := r.URL.Query().Get("staged") == "true"
+
+		var patch string
+		var err error
+
+		if from != "" && to != "" {
+			hashA, errA := s.Repo.ResolveRevision(from)
+			if errA != nil {
+				writeJSONError(w, fmt.Sprintf("invalid revision 'from': %v", errA), http.StatusBadRequest)
+				return
+			}
+			hashB, errB := s.Repo.ResolveRevision(to)
+			if errB != nil {
+				writeJSONError(w, fmt.Sprintf("invalid revision 'to': %v", errB), http.StatusBadRequest)
+				return
+			}
+			patch, err = s.Repo.DiffCommits(hashA, hashB)
+		} else if staged {
+			patch, err = s.Repo.DiffIndexAgainstHead()
+		} else {
+			patch, err = s.Repo.DiffWorkingTreeAgainstIndex()
+		}
+
+		if err != nil {
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "ok",
+			"diff":   patch,
+		})
 	})
 
 	// API: Configure Remote
 	mux.HandleFunc("/api/remote/add", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		var req struct {
@@ -408,24 +583,23 @@ func (s *Server) SetupHandler() http.Handler {
 			Token string `json:"token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error": "invalid json payload"}`, http.StatusBadRequest)
+			writeJSONError(w, "invalid json payload", http.StatusBadRequest)
 			return
 		}
 		if req.Name == "" {
 			req.Name = "origin"
 		}
 		if err := s.Repo.AddRemote(req.Name, req.URL, req.Token); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusBadRequest)
+			writeJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 	})
 
 	// API: Push to GitHub
 	mux.HandleFunc("/api/push", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		var req struct {
@@ -434,7 +608,7 @@ func (s *Server) SetupHandler() http.Handler {
 			Token  string `json:"token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
-			http.Error(w, `{"error": "invalid json payload"}`, http.StatusBadRequest)
+			writeJSONError(w, "invalid json payload", http.StatusBadRequest)
 			return
 		}
 		if req.Remote == "" {
@@ -443,12 +617,11 @@ func (s *Server) SetupHandler() http.Handler {
 
 		res, err := remote.Push(s.Repo, req.Remote, req.Branch, req.Token)
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, html.EscapeString(err.Error())), http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(res)
+		writeJSON(w, http.StatusOK, res)
 	})
 
 	// Serve Frontend
@@ -457,7 +630,45 @@ func (s *Server) SetupHandler() http.Handler {
 		_, _ = w.Write(indexHTML)
 	})
 
-	return mux
+	// Wrap in security middleware: Basic Auth, Security Headers, CSRF protection
+	return s.wrapSecurityMiddleware(mux)
+}
+
+// wrapSecurityMiddleware applies Basic Auth, security headers, and CSRF protection.
+func (s *Server) wrapSecurityMiddleware(next http.Handler) http.Handler {
+	authUser := os.Getenv("GITLITE_AUTH_USER")
+	authPass := os.Getenv("GITLITE_AUTH_PASS")
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 1. Basic Auth check if configured
+		if authUser != "" && authPass != "" {
+			u, p, ok := r.BasicAuth()
+			if !ok || u != authUser || p != authPass {
+				w.Header().Set("WWW-Authenticate", `Basic realm="GitLite Visualizer"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		// 2. Security Headers
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "same-origin")
+
+		// 3. CSRF Protection for state-changing requests
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete {
+			origin := r.Header.Get("Origin")
+			if origin != "" {
+				u, err := url.Parse(origin)
+				if err != nil || (!strings.HasPrefix(u.Host, "127.0.0.1") && !strings.HasPrefix(u.Host, "localhost") && u.Host != r.Host) {
+					http.Error(w, "Cross-site request blocked by CSRF protection", http.StatusForbidden)
+					return
+				}
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Start launches the web server and listens on the configured port.

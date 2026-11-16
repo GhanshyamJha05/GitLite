@@ -95,4 +95,22 @@ func TestDiffEngineWorkflow(t *testing.T) {
 	if !strings.Contains(commitDiffOut, "-line 2: baseline") || !strings.Contains(commitDiffOut, "+line 2: modified in working tree") {
 		t.Errorf("unexpected commit-to-commit diff output:\n%s", commitDiffOut)
 	}
+
+	// 7. Test gitlite diff --color
+	colorDiffOut, err := executeCommand("diff", "--color", rev1, rev2)
+	if err != nil {
+		t.Fatalf("diff --color failed: %v", err)
+	}
+	if !strings.Contains(colorDiffOut, "\033[32m+") || !strings.Contains(colorDiffOut, "\033[31m-") {
+		t.Errorf("expected ANSI color codes in diff --color output:\n%s", colorDiffOut)
+	}
+
+	// 8. Test gitlite log --oneline
+	onelineOut, err := executeCommand("log", "--oneline")
+	if err != nil {
+		t.Fatalf("log --oneline failed: %v", err)
+	}
+	if !strings.Contains(onelineOut, "second revision") || !strings.Contains(onelineOut, "initial commit") {
+		t.Errorf("expected commit subjects in log --oneline, got:\n%s", onelineOut)
+	}
 }

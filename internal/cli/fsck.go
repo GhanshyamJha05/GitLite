@@ -17,10 +17,15 @@ var fsckCmd = &cobra.Command{
 			return err
 		}
 
-		report, err := integrity.Fsck(repo)
+		report, err := integrity.FsckWithProgress(repo, func(phase string, current, total int) {
+			if total > 0 {
+				cmd.Printf("\r%s: %d%% (%d/%d)", phase, (current*100)/total, current, total)
+			}
+		})
 		if err != nil {
 			return err
 		}
+		cmd.Print("\r")
 
 		hasErrors := false
 		for _, issue := range report.Issues {

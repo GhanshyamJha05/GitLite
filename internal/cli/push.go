@@ -41,10 +41,18 @@ var pushCmd = &cobra.Command{
 			Token:       token,
 			Force:       force,
 			SetUpstream: setUpstream,
+			OnProgress: func(phase string, current, total int) {
+				if total > 0 {
+					fmt.Printf("\r%s: %d/%d...", phase, current, total)
+				} else {
+					fmt.Printf("\r%s: %d...", phase, current)
+				}
+			},
 		})
 		if err != nil {
 			return err
 		}
+		fmt.Print("\r\033[K")
 
 		fmt.Printf("To %s\n", res.RepoURL)
 		fmt.Printf(" * [%s] %s -> %s\n", res.HeadCommit[:min(8, len(res.HeadCommit))], res.Branch, res.RemoteRef)
